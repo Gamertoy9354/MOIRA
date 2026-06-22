@@ -47,7 +47,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Determine if we should fallback to dev mode
-        is_dev = not self.jwt_secret or "YOUR_SUPABASE" in self.jwt_secret or os.getenv("DEBUG", "true").lower() == "true"
+        is_dev = not self.jwt_secret or "YOUR_SUPABASE" in self.jwt_secret
 
         # Extract Bearer token
         auth_header = request.headers.get("Authorization", "")
@@ -94,6 +94,25 @@ async def require_auth(request: Request) -> str:
             status_code=401,
             detail="Authentication required — identify yourself to MOIRA.",
         )
+    
+    # In production mode, user_id must be a valid UUID
+    from utils.config import get_settings
+    import os
+    settings = get_settings()
+    supabase_url = settings.supabase_url or os.getenv("SUPABASE_URL", "")
+    supabase_key = settings.supabase_service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    is_mock = not supabase_url or not supabase_key or "YOUR_SUPABASE" in supabase_key
+    
+    if not is_mock:
+        import uuid
+        try:
+            uuid.UUID(str(user_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid user ID format: '{user_id}' is not a valid UUID. If this is production, please ensure SUPABASE_JWT_SECRET is configured in the backend environment variables.",
+            )
+
     from core.llm_router import load_user_ai_config
     await load_user_ai_config(user_id)
     return user_id

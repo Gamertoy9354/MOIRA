@@ -183,8 +183,11 @@ async def update_env(body: EnvUpdateRequest, user_id: str = Depends(require_auth
                     params={"supabase_uid": f"eq.{user_id}", "select": "id"},
                     timeout=5.0
                 )
+                if profile_resp.status_code != 200:
+                    logger.error("Failed to fetch user profile", status=profile_resp.status_code, body=profile_resp.text)
+                    raise HTTPException(status_code=profile_resp.status_code, detail="Failed to fetch user profile from Supabase")
                 profiles = profile_resp.json()
-                if not profiles:
+                if not isinstance(profiles, list) or not profiles:
                     raise HTTPException(status_code=404, detail="Profile not found in database.")
                 profile_id = profiles[0]["id"]
 

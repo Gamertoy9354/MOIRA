@@ -70,7 +70,7 @@ async def load_user_ai_config(user_id: str) -> None:
     # Determine if we are in mock mode
     supabase_url = settings.supabase_url or os.getenv("SUPABASE_URL", "")
     supabase_key = settings.supabase_service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    is_mock = not supabase_url or not supabase_key or "YOUR_SUPABASE" in supabase_key or os.getenv("DEBUG", "true").lower() == "true"
+    is_mock = not supabase_url or not supabase_key or "YOUR_SUPABASE" in supabase_key
     
     from utils.config import user_credentials
     credentials_overrides = {}
@@ -98,7 +98,7 @@ async def load_user_ai_config(user_id: str) -> None:
                 )
                 if profile_resp.status_code == 200:
                     profiles = profile_resp.json()
-                    if profiles:
+                    if isinstance(profiles, list) and profiles:
                         profile_id = profiles[0]["id"]
                         
                         # 2. Get all custom connector configs for this user

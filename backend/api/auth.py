@@ -88,6 +88,16 @@ async def verify_and_upsert(request: Request):
     if not user_id:
         raise HTTPException(status_code=401, detail="No authenticated user in request")
 
+    if not _is_mock_mode():
+        import uuid
+        try:
+            uuid.UUID(str(user_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid user ID format: '{user_id}' is not a valid UUID. Please ensure SUPABASE_JWT_SECRET is configured in the backend environment variables.",
+            )
+
     # Extract display name + avatar from token or request body
     body = {}
     try:
@@ -143,7 +153,9 @@ async def verify_and_upsert(request: Request):
             raise HTTPException(status_code=500, detail="Failed to create user profile")
 
         profiles = upsert_resp.json()
-        profile = profiles[0] if profiles else None
+        profile = None
+        if isinstance(profiles, list) and profiles:
+            profile = profiles[0]
 
         if not profile:
             raise HTTPException(status_code=500, detail="Profile not returned after upsert")
@@ -217,8 +229,11 @@ async def get_me(request: Request, user_id: str = Depends(require_auth)):
             headers=_supa_headers(),
             params={"supabase_uid": f"eq.{user_id}", "select": "*"},
         )
+        if profile_resp.status_code != 200:
+            logger.error("Failed to fetch user profile", status=profile_resp.status_code, body=profile_resp.text)
+            raise HTTPException(status_code=profile_resp.status_code, detail=f"Failed to fetch user profile: {profile_resp.text}")
         profiles = profile_resp.json()
-        if not profiles:
+        if not isinstance(profiles, list) or not profiles:
             raise HTTPException(status_code=404, detail="User profile not found")
 
         profile = profiles[0]
@@ -273,8 +288,11 @@ async def save_onboarding_step(request: Request, user_id: str = Depends(require_
             headers=_supa_headers(),
             params={"supabase_uid": f"eq.{user_id}", "select": "id"},
         )
+        if profile_resp.status_code != 200:
+            logger.error("Failed to fetch user profile", status=profile_resp.status_code, body=profile_resp.text)
+            raise HTTPException(status_code=profile_resp.status_code, detail="Failed to fetch user profile")
         profiles = profile_resp.json()
-        if not profiles:
+        if not isinstance(profiles, list) or not profiles:
             raise HTTPException(status_code=404, detail="Profile not found")
         profile_id = profiles[0]["id"]
 
@@ -333,8 +351,11 @@ async def get_connector_config(connector: str, request: Request, user_id: str = 
             headers=_supa_headers(),
             params={"supabase_uid": f"eq.{user_id}", "select": "id"},
         )
+        if profile_resp.status_code != 200:
+            logger.error("Failed to fetch user profile", status=profile_resp.status_code, body=profile_resp.text)
+            raise HTTPException(status_code=profile_resp.status_code, detail="Failed to fetch user profile")
         profiles = profile_resp.json()
-        if not profiles:
+        if not isinstance(profiles, list) or not profiles:
             raise HTTPException(status_code=404, detail="Profile not found")
         profile_id = profiles[0]["id"]
 
@@ -405,8 +426,11 @@ async def save_connector_config(connector: str, request: Request, user_id: str =
             headers=_supa_headers(),
             params={"supabase_uid": f"eq.{user_id}", "select": "id"},
         )
+        if profile_resp.status_code != 200:
+            logger.error("Failed to fetch user profile", status=profile_resp.status_code, body=profile_resp.text)
+            raise HTTPException(status_code=profile_resp.status_code, detail="Failed to fetch user profile")
         profiles = profile_resp.json()
-        if not profiles:
+        if not isinstance(profiles, list) or not profiles:
             raise HTTPException(status_code=404, detail="Profile not found")
         profile_id = profiles[0]["id"]
 
@@ -546,9 +570,10 @@ async def test_connector_config(connector: str, request: Request, user_id: str =
                     headers=_supa_headers(),
                     params={"supabase_uid": f"eq.{user_id}", "select": "id"},
                 )
-                profiles = profile_resp.json()
-                if profiles:
-                    profile_id = profiles[0]["id"]
+                if profile_resp.status_code == 200:
+                    profiles = profile_resp.json()
+                    if isinstance(profiles, list) and profiles:
+                        profile_id = profiles[0]["id"]
                     await client.patch(
                         f"{SUPABASE_URL}/rest/v1/user_env_configs",
                         headers=_supa_headers(),
@@ -596,10 +621,10 @@ async def delete_account(user_id: str = Depends(require_auth)):
                     params={"supabase_uid": f"eq.{user_id}", "select": "id"},
                     timeout=5.0
                 )
-                profiles = profile_resp.json()
-                
-                if profiles:
-                    profile_id = profiles[0]["id"]
+                if profile_resp.status_code == 200:
+                    profiles = profile_resp.json()
+                    if isinstance(profiles, list) and profiles:
+                        profile_id = profiles[0]["id"]
                     
                     # B. Delete user onboarding
                     await client.delete(
