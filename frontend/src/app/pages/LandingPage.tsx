@@ -991,7 +991,7 @@ export function LandingPage() {
                 <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 80% 60% at 50% 50%, rgba(74,14,143,0.15) 0%, transparent 75%)', pointerEvents: 'none' }} />
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'linear-gradient(to top, #080610, transparent)', pointerEvents: 'none' }} />
 
-                <div style={{ textAlign: 'center', position: 'relative', zIndex: 1, padding: '0 5%' }}>
+                <div style={{ textAlign: 'center', position: 'relative', zIndex: 1, padding: '100px 5% 40px' }}>
                     {/* Ω badge */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0, rotate: -180 }}
@@ -1325,6 +1325,29 @@ User: "Onboard new hire Dev Patel in GitHub and Slack"
                                 For local sandbox validation, MOIRA supports a **Mock Developer Bypass** that runs auth entirely in-memory with local `.env` configuration file updates, allowing zero-config code testing.
                             </p>
                         </div>
+                    </div>
+
+                    {/* Google OAuth & API Disclosure Section */}
+                    <div style={{
+                        marginTop: 40,
+                        background: 'rgba(74,14,143,0.06)',
+                        border: '1px dashed rgba(200,169,110,0.3)',
+                        borderRadius: 20,
+                        padding: 32,
+                        textAlign: 'left'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#C8A96E', fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 17, marginBottom: 14 }}>
+                            <Globe size={20} /> Google API & OAuth Scope Disclosure
+                        </div>
+                        <p style={{ margin: '0 0 16px', fontSize: 14, color: 'rgba(240,235,248,0.7)', lineHeight: 1.7 }}>
+                            <strong>MOIRA</strong> uses Google OAuth strictly to authenticate developers and verify identity during signup/login. We request your public email address and avatar strictly to create your unique multi-tenant profile under our secure, RLS-isolated Supabase backend.
+                        </p>
+                        <p style={{ margin: '0 0 16px', fontSize: 14, color: 'rgba(240,235,248,0.7)', lineHeight: 1.7 }}>
+                            <strong>Google Sheets API Usage</strong>: In the integration wizard, users can optionally grant Google Sheets read/write permissions. MOIRA uses this scope strictly to write flat-table execution summaries and latency metrics to your own designated Google Sheets for audit purposes. We do not store, inspect, or transfer any private spreadsheet data to external servers.
+                        </p>
+                        <p style={{ margin: 0, fontSize: 13, color: 'rgba(200,169,110,0.45)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Shield size={14} style={{ color: '#C8A96E' }} /> For more details on user data security and storage practices, please read our public <a href="/privacy" style={{ color: '#E8D5A3', textDecoration: 'underline' }}>Privacy Policy</a> and <a href="/terms" style={{ color: '#E8D5A3', textDecoration: 'underline' }}>Terms of Service</a>.
+                        </p>
                     </div>
                 </div>
             </RevealSection>
