@@ -1415,12 +1415,18 @@ User: "Onboard new hire Dev Patel in GitHub and Slack"
             {/* ════════════════════════════════════════════════════════════
                 FOOTER (Year 2026 Updated)
             ════════════════════════════════════════════════════════════ */}
-            <footer style={{ padding: '24px 5%', borderTop: '1px solid rgba(200,169,110,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, position: 'relative', zIndex: 1 }}>
-                <span style={{ fontFamily: 'Cinzel, serif', fontSize: 14, color: 'rgba(200,169,110,0.5)', letterSpacing: '0.06em' }}>Ω MOIRA</span>
-                <span style={{ fontSize: 12, color: 'rgba(200,169,110,0.28)', letterSpacing: '0.04em' }}>
-                    © 2026 Team InnoCrew · Shis Maheta & Dev Patel · moira.sinaai.in
-                </span>
-                <span style={{ fontSize: 12, color: 'rgba(200,169,110,0.2)' }}>Ancient. Inevitable. Timeless.</span>
+            <footer style={{ padding: '32px 5%', borderTop: '1px solid rgba(200,169,110,0.07)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 12 }}>
+                    <span style={{ fontFamily: 'Cinzel, serif', fontSize: 14, color: 'rgba(200,169,110,0.5)', letterSpacing: '0.06em' }}>Ω MOIRA</span>
+                    <span style={{ fontSize: 12, color: 'rgba(200,169,110,0.28)', letterSpacing: '0.04em', textAlign: 'center' }}>
+                        © 2026 Team InnoCrew · Shis Maheta & Dev Patel · moira.sinaai.in
+                    </span>
+                    <span style={{ fontSize: 12, color: 'rgba(200,169,110,0.2)' }}>Ancient. Inevitable. Timeless.</span>
+                </div>
+                <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
+                    <motion.button onClick={() => navigate('/privacy')} whileHover={{ color: '#C8A96E', scale: 1.02 }} whileTap={{ scale: 0.98 }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(200,169,110,0.4)', fontSize: 12, transition: 'color 0.2s', fontFamily: 'Cinzel, serif', letterSpacing: '0.04em', padding: 0 }}>Privacy Policy</motion.button>
+                    <motion.button onClick={() => navigate('/terms')} whileHover={{ color: '#C8A96E', scale: 1.02 }} whileTap={{ scale: 0.98 }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(200,169,110,0.4)', fontSize: 12, transition: 'color 0.2s', fontFamily: 'Cinzel, serif', letterSpacing: '0.04em', padding: 0 }}>Terms of Service</motion.button>
+                </div>
             </footer>
         </div>
     );

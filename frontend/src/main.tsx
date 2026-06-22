@@ -6,6 +6,8 @@ import { LandingPage } from './app/pages/LandingPage';
 import { LoginPage } from './app/pages/LoginPage';
 import { AuthCallback } from './app/pages/AuthCallback';
 import { OnboardingFlow } from './app/pages/OnboardingFlow';
+import { PrivacyPolicyPage } from './app/pages/PrivacyPolicyPage';
+import { TermsOfServicePage } from './app/pages/TermsOfServicePage';
 import { AuthGuard } from './app/components/AuthGuard';
 import './styles/index.css';
 import { Toaster } from 'sonner';
@@ -18,6 +20,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                <Route path="/terms" element={<TermsOfServicePage />} />
 
                 {/* Protected routes */}
                 <Route path="/onboarding" element={
