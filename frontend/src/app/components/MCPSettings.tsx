@@ -34,14 +34,14 @@ const initialEnvConfig = {
     // ── Active Provider ──────────────────────────────────────────────────────
     active_provider: 'nvidia',
     // ── NVIDIA NIM ───────────────────────────────────────────────────────────
-    nvidia_api_key: '***REMOVED***',
+    nvidia_api_key: '',
     nvidia_base_url: 'https://integrate.api.nvidia.com/v1',
     nvidia_model: 'meta/llama-3.3-70b-instruct',
     // ── Groq ─────────────────────────────────────────────────────────────────
-    groq_api_key: '***REMOVED***',
+    groq_api_key: '',
     groq_model: 'llama-3.3-70b-versatile',
     // ── OpenRouter ───────────────────────────────────────────────────────────
-    openrouter_api_key: '***REMOVED***',
+    openrouter_api_key: '',
     openrouter_base_url: 'https://openrouter.ai/api/v1',
     openrouter_model: 'meta-llama/llama-3.3-70b-instruct:free',
     // ── LM Studio (local) ────────────────────────────────────────────────────
@@ -49,29 +49,21 @@ const initialEnvConfig = {
     lmstudio_model: 'local-model',
     lmstudio_api_key: 'lm-studio',
     // GitHub
-    github_token: '***REMOVED***',
-    github_default_repo_owner: 'Gamertoy9354',
+    github_token: '',
+    github_default_repo_owner: '',
     // Jira
-    jira_base_url: 'https://shismehta77.atlassian.net',
-    jira_email: 'shismehta77@gmail.com',
-    jira_api_token: '***REMOVED***',
-    jira_default_project: 'SCRUM',
+    jira_base_url: '',
+    jira_email: '',
+    jira_api_token: '',
+    jira_default_project: '',
     // Slack
-    slack_bot_token: '***REMOVED***',
-    slack_default_channel: '#social',
+    slack_bot_token: '',
+    slack_default_channel: '',
     // Google Sheets
-    google_service_account_json: '../mcp-test-491811-fa80852343e8.json',
-    google_audit_spreadsheet_id: '1GevBw5GFWVMRH0Rp7eJ7F-XI0b49_PVfJ5L2khPg0lg',
-    // DB & Redis
-    database_url: 'postgresql://postgres:postgres@127.0.0.1:5432/mcpgateway',
-    redis_url: 'redis://localhost:6379',
-    // App
-    app_host: '0.0.0.0',
-    app_port: '8001',
-    debug: 'true',
-    max_recovery_attempts: '3',
-    max_retry_attempts: '3',
-    retry_backoff_base: '2',
+    google_client_email: '',
+    google_private_key: '',
+    google_project_id: '',
+    google_audit_spreadsheet_id: '',
 };
 
 const initialConnectors: ConnectorConfig[] = [
@@ -416,60 +408,6 @@ function EnvironmentSlide({ config, setConfig }: { config: typeof initialEnvConf
                     </div>
                 )}
             </SectionBlock>
-
-            <SectionBlock title="Database & Redis" icon={<Database className="w-4 h-4" />}>
-                <FieldRow label="PostgreSQL Connection URL">
-                    <TextInput id="database_url" value={config.database_url} onChange={upd('database_url')} />
-                </FieldRow>
-                <FieldRow label="Redis Connection URL">
-                    <TextInput id="redis_url" value={config.redis_url} onChange={upd('redis_url')} />
-                </FieldRow>
-            </SectionBlock>
-
-            <SectionBlock title="Application" icon={<Globe className="w-4 h-4" />}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                    <FieldRow label="Host">
-                        <TextInput id="app_host" value={config.app_host} onChange={upd('app_host')} />
-                    </FieldRow>
-                    <FieldRow label="Port">
-                        <TextInput id="app_port" value={config.app_port} onChange={upd('app_port')} />
-                    </FieldRow>
-                    <FieldRow label="Debug Mode">
-                        <select
-                            id="debug"
-                            value={config.debug}
-                            onChange={e => upd('debug')(e.target.value)}
-                            style={{
-                                background: 'rgba(255,255,255,0.04)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: 8,
-                                color: 'rgba(255,255,255,0.85)',
-                                padding: '8px 12px',
-                                width: '100%',
-                                fontSize: 13,
-                                outline: 'none',
-                            }}
-                        >
-                            <option value="true">true</option>
-                            <option value="false">false</option>
-                        </select>
-                    </FieldRow>
-                </div>
-            </SectionBlock>
-
-            <SectionBlock title="Recovery & Retry" icon={<Shield className="w-4 h-4" />}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                    <FieldRow label="Max Recovery Attempts">
-                        <TextInput id="max_recovery_attempts" value={config.max_recovery_attempts} onChange={upd('max_recovery_attempts')} />
-                    </FieldRow>
-                    <FieldRow label="Max Retry Attempts">
-                        <TextInput id="max_retry_attempts" value={config.max_retry_attempts} onChange={upd('max_retry_attempts')} />
-                    </FieldRow>
-                    <FieldRow label="Retry Backoff Base">
-                        <TextInput id="retry_backoff_base" value={config.retry_backoff_base} onChange={upd('retry_backoff_base')} />
-                    </FieldRow>
-                </div>
-            </SectionBlock>
         </div>
     );
 }
@@ -534,8 +472,14 @@ function ConnectorSlide({ connector, onChange, envConfig, setEnvConfig }: { conn
         if (connector.id === 'sheets') {
             return (
                 <SectionBlock title="Google Sheets Credentials" icon={<FileSpreadsheet className="w-4 h-4" />}>
-                    <FieldRow label="Service Account JSON Path" hint="Relative or absolute path to your GCP service account credentials file">
-                        <TextInput id="google_service_account_json" value={envConfig.google_service_account_json} onChange={upd('google_service_account_json')} placeholder="../credentials.json" />
+                    <FieldRow label="Google Service Account Email" hint="Your service account client email (e.g. name@project.iam.gserviceaccount.com)">
+                        <TextInput id="google_client_email" value={envConfig.google_client_email} onChange={upd('google_client_email')} placeholder="name@project.iam.gserviceaccount.com" />
+                    </FieldRow>
+                    <FieldRow label="Private Key" hint="Your Google Service Account Private Key (-----BEGIN PRIVATE KEY-----...)">
+                        <SecretInput id="google_private_key" value={envConfig.google_private_key} onChange={upd('google_private_key')} placeholder="-----BEGIN PRIVATE KEY-----..." />
+                    </FieldRow>
+                    <FieldRow label="Project ID" hint="Your Google Cloud Project ID">
+                        <TextInput id="google_project_id" value={envConfig.google_project_id} onChange={upd('google_project_id')} placeholder="my-gcp-project" />
                     </FieldRow>
                     <FieldRow label="Audit Spreadsheet ID" hint="The Google Sheets ID used for workflow audit logging">
                         <TextInput id="google_audit_spreadsheet_id" value={envConfig.google_audit_spreadsheet_id} onChange={upd('google_audit_spreadsheet_id')} placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" />

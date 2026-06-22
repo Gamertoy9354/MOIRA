@@ -70,7 +70,7 @@ def partition_values(values: dict[str, str]) -> dict[str, dict[str, str]]:
             partitions["jira"][k] = upper_values[k]
             
     # Map sheets
-    for k in ["GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_AUDIT_SPREADSHEET_ID", "GOOGLE_SERVICE_ACCOUNT_B64"]:
+    for k in ["GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_AUDIT_SPREADSHEET_ID", "GOOGLE_SERVICE_ACCOUNT_B64", "GOOGLE_CLIENT_EMAIL", "GOOGLE_PRIVATE_KEY", "GOOGLE_PROJECT_ID"]:
         if k in upper_values:
             partitions["sheets"][k] = upper_values[k]
             
@@ -255,6 +255,9 @@ async def get_env(user_id: str = Depends(require_auth)) -> dict:
         "slack_default_channel": s.slack_default_channel,
         "google_service_account_json": s.google_service_account_json,
         "google_service_account_b64": s.google_service_account_b64,
+        "google_client_email": s.google_client_email,
+        "google_private_key": s.google_private_key,
+        "google_project_id": s.google_project_id,
         "google_audit_spreadsheet_id": s.google_audit_spreadsheet_id,
         "database_url": s.database_url,
         "redis_url": s.redis_url,

@@ -467,13 +467,21 @@ async def test_connector_config(connector: str, request: Request, user_id: str =
                     result["message"] = "Invalid Jira credentials"
 
         elif connector == "slack":
-            webhook = config_data.get("SLACK_WEBHOOK_URL", "")
+            token = config_data.get("SLACK_BOT_TOKEN", "")
             async with httpx.AsyncClient() as c:
-                r = await c.post(webhook, json={"text": "🔮 MOIRA connection test — fate is watching."}, timeout=8)
+                r = await c.post(
+                    "https://slack.com/api/auth.test",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=8
+                )
                 if r.status_code == 200:
-                    result = {"connector": connector, "success": True, "message": "Test message sent to Slack"}
+                    data = r.json()
+                    if data.get("ok"):
+                        result = {"connector": connector, "success": True, "message": f"Connected to Slack workspace: {data.get('team')}"}
+                    else:
+                        result["message"] = f"Slack API error: {data.get('error')}"
                 else:
-                    result["message"] = "Invalid Slack webhook URL"
+                    result["message"] = f"Failed to connect to Slack (HTTP {r.status_code})"
 
         elif connector == "ai":
             provider = config_data.get("ACTIVE_PROVIDER", "nvidia").lower().strip()

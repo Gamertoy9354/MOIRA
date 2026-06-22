@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # ── Google Sheets ────────────────────────────────────────────────────────
     google_service_account_json: str = Field(default="")
     google_service_account_b64: str = Field(default="")
+    google_client_email: str = Field(default="")
+    google_private_key: str = Field(default="")
+    google_project_id: str = Field(default="")
     google_audit_spreadsheet_id: str = Field(default="")
 
     # ── Database ─────────────────────────────────────────────────────────────

@@ -43,14 +43,35 @@ class GoogleSheetsConnector(MCPConnector):
 
     @property
     def default_spreadsheet_id(self) -> str:
-        return get_settings().google_audit_spreadsheet_id
+        from utils.config import get_credential
+        return get_credential("GOOGLE_AUDIT_SPREADSHEET_ID") or get_settings().google_audit_spreadsheet_id
 
     # ------------------------------------------------------------------
     # Service account helpers
     # ------------------------------------------------------------------
 
     def _load_service_account(self, settings: Any) -> dict:
-        """Load service account JSON from env (path or base64)."""
+        """Load service account JSON from env/settings fields or files."""
+        from utils.config import get_credential
+        client_email = get_credential("GOOGLE_CLIENT_EMAIL")
+        private_key = get_credential("GOOGLE_PRIVATE_KEY")
+        project_id = get_credential("GOOGLE_PROJECT_ID")
+
+        if client_email and private_key:
+            pk = private_key.replace("\\n", "\n")
+            return {
+                "type": "service_account",
+                "project_id": project_id or "default-project",
+                "private_key_id": "moira-custom-key",
+                "private_key": pk,
+                "client_email": client_email,
+                "client_id": "1234567890",
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}"
+            }
+
         if settings.google_service_account_b64:
             try:
                 raw = base64.b64decode(settings.google_service_account_b64)
