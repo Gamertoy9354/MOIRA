@@ -1,0 +1,37 @@
+{
+  "tool_name": "get_weather_data",
+  "service_name": "openweathermap",
+  "summary": "OpenWeatherMap provides current and forecasted weather data through its API, allowing developers to access weather information for various locations worldwide.",
+  "estimated_setup_time": "5 minutes",
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "Create an OpenWeatherMap Account",
+      "description": "Go to openweathermap.org and sign up for a free account using your work email.",
+      "screenshot_hint": "You should see the OpenWeatherMap dashboard with a navigation menu at the top.",
+      "url": "https://home.openweathermap.org/users/sign_up",
+      "expected_result": "You are logged into the OpenWeatherMap dashboard."
+    },
+    {
+      "step_number": 2,
+      "title": "Generate an API Key",
+      "description": "Navigate to the API keys section and generate a new key.",
+      "screenshot_hint": "You should see a list of your API keys, including the newly generated one.",
+      "url": "https://home.openweathermap.org/api_keys",
+      "expected_result": "You have a new API key listed in the API keys section."
+    }
+  ],
+  "env_file_snippet": "OPENWEATHERMAP_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxx",
+  "test_command": "curl -X GET http://api.openweathermap.org/data/2.5/weather?q=London&appid=$OPENWEATHERMAP_API_KEY",
+  "common_errors": [
+    {
+      "error": "401 Unauthorized",
+      "fix": "Your API key is invalid or has been revoked. Generate a new one from the API keys settings page."
+    },
+    {
+      "error": "429 Too Many Requests",
+      "fix": "You have exceeded the request limit for your API key. Consider upgrading to a paid plan or optimizing your requests."
+    }
+  ],
+  "pricing_info": "OpenWeatherMap free tier: 60 calls/minute. Paid plans start at $15/month for 500,000 calls."
+}

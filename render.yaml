@@ -1,0 +1,72 @@
+services:
+  # 1. Redis Key Value Store (Valkey/Redis compatible, free tier)
+  - type: redis
+    name: moira-redis
+    plan: free
+    ipAllowList: [] # Allow internal traffic only
+
+  # 2. Backend Web Service (FastAPI)
+  - type: web
+    name: moira-backend
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python main.py
+    plan: free
+    envVars:
+      # Automatically binds the connection string from the moira-redis service
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: moira-redis
+          property: connectionString
+
+      # Supabase Connection URL (postgres connection string)
+      - key: DATABASE_URL
+        sync: false
+
+      # Supabase Client Credentials
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+
+      # AI Provider configuration
+      - key: ACTIVE_PROVIDER
+        value: nvidia
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: NVIDIA_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: NVIDIA_MODEL
+        value: meta/llama-3.3-70b-instruct
+
+      # Application Config
+      - key: DEBUG
+        value: "false"
+      - key: APP_HOST
+        value: 0.0.0.0
+
+  # 3. Static Frontend (Vite)
+  - type: static
+    name: moira-frontend
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    domains:
+      - moira.sinaai.in
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_WS_URL
+        sync: false

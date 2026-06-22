@@ -1,0 +1,29 @@
+{
+  "tool_name": "get_latest_tickets",
+  "service_name": "linear",
+  "summary": "Linear is a project management tool that helps teams organize and prioritize their work, and the get_latest_tickets API endpoint retrieves the most recent tickets from Linear.",
+  "estimated_setup_time": "3 minutes",
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "Create a Linear Account and API Key",
+      "description": "Log in to linear.app, go to Settings > API Keys, and click Create API Key to generate a new API key.",
+      "screenshot_hint": "You should see the API Keys settings page with a list of existing keys and a button to create a new one.",
+      "url": "https://linear.app/settings/api-keys",
+      "expected_result": "You have created a new Linear API key and have its value ready to use."
+    }
+  ],
+  "env_file_snippet": "LINEAR_API_KEY=xxxxxxxxxxxxxxxxxxxxxxx",
+  "test_command": "curl -X GET https://api.linear.app/graphql -H 'Authorization: Bearer $LINEAR_API_KEY' -H 'Content-Type: application/json' -d '{\"query\": \"query { issues(limit: 10, sortBy: { direction: DESC, field: CREATED_AT }) { id, title } }\"}'",
+  "common_errors": [
+    {
+      "error": "401 Unauthorized",
+      "fix": "Your API key is invalid or has been revoked. Generate a new one from the API Keys settings page."
+    },
+    {
+      "error": "403 Forbidden",
+      "fix": "Your API key does not have the required permissions. Ensure it has the necessary access rights."
+    }
+  ],
+  "pricing_info": "Linear offers a free plan with limited features, as well as several paid plans starting at $15/user/month."
+}

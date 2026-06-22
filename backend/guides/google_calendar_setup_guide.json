@@ -1,0 +1,61 @@
+{
+  "tool_name": "create_event",
+  "service_name": "google_calendar",
+  "summary": "Google Calendar is a time management and scheduling service that allows users to create and manage events",
+  "estimated_setup_time": "10 minutes",
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "Create a Google Cloud Project",
+      "description": "Go to console.cloud.google.com and create a new project",
+      "screenshot_hint": "You should see the Google Cloud Console dashboard with your newly created project",
+      "url": "https://console.cloud.google.com/",
+      "expected_result": "You have created a new Google Cloud project"
+    },
+    {
+      "step_number": 2,
+      "title": "Enable Google Calendar API",
+      "description": "Search for Google Calendar API in the marketplace and click on the result, then click on the Enable button",
+      "screenshot_hint": "You should see the Google Calendar API page with the Enable button",
+      "url": "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com",
+      "expected_result": "Google Calendar API is enabled for your project"
+    },
+    {
+      "step_number": 3,
+      "title": "Create Credentials for Your Project",
+      "description": "Go to the Navigation menu and click on APIs & Services > Credentials, then click on Create Credentials > OAuth client ID",
+      "screenshot_hint": "You should see the Create credentials page with the OAuth client ID option",
+      "url": "https://console.cloud.google.com/apis/credentials",
+      "expected_result": "You have created credentials for your project"
+    },
+    {
+      "step_number": 4,
+      "title": "Create a Service Account and Generate a Private Key",
+      "description": "Go to the Navigation menu and click on IAM & Admin > Service accounts, then click on Create Service Account and follow the prompts to generate a private key",
+      "screenshot_hint": "You should see the Service accounts page with the Create Service Account button",
+      "url": "https://console.cloud.google.com/iam-admin/serviceaccounts",
+      "expected_result": "You have created a service account and generated a private key"
+    },
+    {
+      "step_number": 5,
+      "title": "Create a Google Calendar Token",
+      "description": "Use the private key to authenticate with the Google Calendar API and obtain a token",
+      "screenshot_hint": "You should see the authentication prompt to obtain a token",
+      "url": "https://developers.google.com/calendar/api/quickstart/java",
+      "expected_result": "You have obtained a Google Calendar token"
+    }
+  ],
+  "env_file_snippet": "GOOGLE_CALENDAR_TOKEN=your_token_here",
+  "test_command": "curl -X POST https://www.googleapis.com/calendar/v3/calendars/primary/events -H 'Authorization: Bearer $GOOGLE_CALENDAR_TOKEN' -H 'Content-Type: application/json' -d '{\"summary\":\"Test Event\",\"description\":\"Test Event\",\"start\":{\"date\":\"2024-01-01\"},\"end\":{\"date\":\"2024-01-01\"}}'",
+  "common_errors": [
+    {
+      "error": "401 Unauthorized",
+      "fix": "Your API token is invalid or has been revoked. Generate a new one from the Google Cloud Console"
+    },
+    {
+      "error": "403 Forbidden",
+      "fix": "Your API token does not have the required permissions. Set it to have the correct permissions in the Google Cloud Console"
+    }
+  ],
+  "pricing_info": "Google Calendar API is free for most use cases, but may incur costs for large-scale or commercial use. See the Google Cloud Pricing page for more information"
+}

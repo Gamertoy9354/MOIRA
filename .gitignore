@@ -1,0 +1,60 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+web_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+out/
+
+# Python env and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+.pytest_cache/
+.tox/
+.coverage
+.cache
+htmlcov/
+
+# Local databases and runtime state
+scratch_db.json
+backend/scratch_db.json
+*.db
+*.sqlite
+*.log
+
+# Environments and Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+mcp-test-*.json
+*.pem
+*.key
+google-key.json
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Thumbs.db

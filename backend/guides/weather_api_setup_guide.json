@@ -1,0 +1,49 @@
+{
+  "tool_name": "get_weather",
+  "service_name": "weather_api",
+  "summary": "OpenWeatherMap provides weather data and forecasts through a REST API.",
+  "estimated_setup_time": "5 minutes",
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "Create an OpenWeatherMap Account",
+      "description": "Go to the OpenWeatherMap website and sign up for a free account.",
+      "screenshot_hint": "You should see the OpenWeatherMap homepage with a blue header and sign up form.",
+      "url": "https://home.openweathermap.org/users/sign_up",
+      "expected_result": "You have created an account and are logged in."
+    },
+    {
+      "step_number": 2,
+      "title": "Navigate to API Keys Section",
+      "description": "After logging in, go to the API keys section to generate your key.",
+      "screenshot_hint": "Look for the 'API keys' link in your account dashboard navigation menu.",
+      "url": "https://home.openweathermap.org/api_keys",
+      "expected_result": "You are on the API keys management page."
+    },
+    {
+      "step_number": 3,
+      "title": "Generate Your API Key",
+      "description": "Click the 'Generate' button to create a new API key for your application.",
+      "screenshot_hint": "You should see a form with a 'Generate' button and fields for key name and permissions.",
+      "url": "https://home.openweathermap.org/api_keys",
+      "expected_result": "Your new API key is displayed and ready to use."
+    }
+  ],
+  "env_file_snippet": "OPENWEATHER_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "test_command": "curl -X GET 'https://api.openweathermap.org/data/2.5/weather?q=London&appid=$OPENWEATHER_API_KEY'",
+  "common_errors": [
+    {
+      "error": "401 Unauthorized",
+      "fix": "Your API key is invalid or missing. Verify that you're using the correct API key from your OpenWeatherMap account."
+    },
+    {
+      "error": "403 Forbidden",
+      "fix": "Your API key doesn't have permission to access the requested resource. Check that you're using a valid key with appropriate permissions."
+    },
+    {
+      "error": "429 Too Many Requests",
+      "fix": "You've exceeded the rate limit for your subscription plan. Consider upgrading your plan or implementing request throttling."
+    }
+  ],
+  "pricing_info": "OpenWeatherMap free tier: 1,000 API calls/day. Paid plans start at $40/month for 10,000 calls."
+}

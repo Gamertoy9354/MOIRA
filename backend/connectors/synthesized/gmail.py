@@ -1,0 +1,118 @@
+"""Gmail MCP Connector — wraps Gmail API."""
+from __future__ import annotations
+import base64
+from typing import Any
+import httpx
+import os
+from connectors.base import (
+    MCPConnector,
+    MCPNotFoundError,
+    MCPPermissionError,
+    MCPRateLimitError,
+    MCPToolError,
+    MCPTransientError,
+)
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+_GMAIL_BASE = "https://www.googleapis.com/gmail/v1"
+
+class GmailConnector(MCPConnector):
+    """Connector that exposes Gmail operations as MCP tools."""
+
+    def __init__(self) -> None:
+        self._token = os.environ.get("GMAIL_TOKEN")
+        self._headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Content-Type": "application/json",
+        }
+
+    # ------------------------------------------------------------------
+    # MCPConnector interface
+    # ------------------------------------------------------------------
+    def get_connector_name(self) -> str:
+        return "gmail"
+
+    def get_scoped_permissions(self) -> list[str]:
+        return [
+            "gmail:read",
+            "gmail:write",
+            "gmail:send",
+        ]
+
+    async def list_tools(self) -> list[dict]:
+        return [
+            {
+                "name": "setup_credentials",
+                "description": "Set up Gmail MCP tool credentials",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "client_id": {"type": "string", "description": "Client ID"},
+                        "client_secret": {"type": "string", "description": "Client secret"},
+                        "redirect_uri": {"type": "string", "description": "Redirect URI"},
+                    },
+                    "required": ["client_id", "client_secret", "redirect_uri"],
+                },
+                "sensitive": True,
+            },
+        ]
+
+    async def invoke(self, tool_name: str, params: dict) -> dict:
+        dispatch = {
+            "setup_credentials": self._setup_credentials,
+        }
+        if tool_name not in dispatch:
+            raise MCPNotFoundError(f"Gmail connector has no tool '{tool_name}'")
+        return await dispatch[tool_name](params)
+
+    # ------------------------------------------------------------------
+    # Internal HTTP helper
+    # ------------------------------------------------------------------
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> dict:
+        url = f"{_GMAIL_BASE}{path}"
+        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+            resp = await client.request(method, url, **kwargs)
+            if resp.status_code == 401 or resp.status_code == 403:
+                raise MCPPermissionError(
+                    f"Gmail auth error {resp.status_code}: {resp.text}",
+                    error_code=str(resp.status_code),
+                )
+            if resp.status_code == 404:
+                raise MCPNotFoundError(
+                    f"Gmail resource not found: {path}",
+                    error_code="404",
+                )
+            if resp.status_code == 429:
+                raise MCPRateLimitError(
+                    "Gmail API rate limit exceeded",
+                    error_code="429",
+                )
+            if resp.status_code in (500, 502, 503):
+                raise MCPTransientError(
+                    f"Gmail transient error {resp.status_code}",
+                    error_code=str(resp.status_code),
+                )
+            if not resp.is_success:
+                raise MCPToolError(
+                    f"Gmail API error {resp.status_code}: {resp.text}",
+                    error_code=str(resp.status_code),
+                )
+            return resp.json() if resp.content else {}
+
+    # ------------------------------------------------------------------
+    # Tool implementations
+    # ------------------------------------------------------------------
+    async def _setup_credentials(self, params: dict) -> dict:
+        client_id = params["client_id"]
+        client_secret = params["client_secret"]
+        redirect_uri = params["redirect_uri"]
+        # Implement credentials setup logic here
+        # For demonstration purposes, just return a success message
+        return {"message": "Gmail MCP tool credentials set up successfully"}

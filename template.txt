@@ -1,0 +1,1 @@
+hey can you create an bug on jira for frontend not working and then send the same issue on github and also notify everyone about that bug on slack and also sned me email on : shismehta77@gmial.com for the same audit
