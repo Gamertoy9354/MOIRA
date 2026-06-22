@@ -37,6 +37,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://moira.sinaai.in",          # Production domain
     "https://www.moira.sinaai.in",
+    "https://moira-backend-ly1o.onrender.com",  # Render backend URL
 ]
 # Allow any additional origins from env (comma-separated)
 extra_origins = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
