@@ -353,7 +353,7 @@ async def submit_credentials(
 
             # Upsert config
             resp = await client.post(
-                f"{supabase_url}/rest/v1/user_env_configs",
+                f"{supabase_url}/rest/v1/user_env_configs?on_conflict=user_id,connector_name",
                 headers={**headers, "Prefer": "resolution=merge-duplicates,return=representation"},
                 json={
                     "user_id": profile_id,

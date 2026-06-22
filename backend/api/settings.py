@@ -193,7 +193,7 @@ async def update_env(body: EnvUpdateRequest, user_id: str = Depends(require_auth
                     if not config_data:
                         continue
                     resp = await client.post(
-                        f"{SUPABASE_URL}/rest/v1/user_env_configs",
+                        f"{SUPABASE_URL}/rest/v1/user_env_configs?on_conflict=user_id,connector_name",
                         headers={**_supa_headers(), "Prefer": "resolution=merge-duplicates,return=representation"},
                         json={
                             "user_id": profile_id,

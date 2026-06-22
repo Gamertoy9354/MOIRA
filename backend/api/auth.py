@@ -128,7 +128,7 @@ async def verify_and_upsert(request: Request):
     async with httpx.AsyncClient() as client:
         # Upsert user profile
         upsert_resp = await client.post(
-            f"{SUPABASE_URL}/rest/v1/user_profiles",
+            f"{SUPABASE_URL}/rest/v1/user_profiles?on_conflict=supabase_uid",
             headers={**_supa_headers(), "Prefer": "resolution=merge-duplicates,return=representation"},
             json={
                 "supabase_uid": user_id,
@@ -152,7 +152,7 @@ async def verify_and_upsert(request: Request):
 
         # Ensure onboarding record exists
         await client.post(
-            f"{SUPABASE_URL}/rest/v1/user_onboarding",
+            f"{SUPABASE_URL}/rest/v1/user_onboarding?on_conflict=user_id",
             headers={**_supa_headers(), "Prefer": "resolution=ignore-duplicates"},
             json={"user_id": profile_id, "completed_steps": []},
         )
@@ -412,7 +412,7 @@ async def save_connector_config(connector: str, request: Request, user_id: str =
 
         # Upsert config
         resp = await client.post(
-            f"{SUPABASE_URL}/rest/v1/user_env_configs",
+            f"{SUPABASE_URL}/rest/v1/user_env_configs?on_conflict=user_id,connector_name",
             headers={**_supa_headers(), "Prefer": "resolution=merge-duplicates,return=representation"},
             json={
                 "user_id": profile_id,
