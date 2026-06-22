@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { supabase } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -976,7 +977,57 @@ function Navbar({ onGetStarted }: { onGetStarted: () => void }) {
 export function LandingPage() {
     const navigate = useNavigate();
 
-    const handleGetStarted = () => navigate('/login');
+    useEffect(() => {
+        // Auto-redirect if already logged in
+        const checkSession = async () => {
+            const { data } = await supabase.auth.getSession();
+            if (data?.session) {
+                try {
+                    const { authFetch } = await import('../../lib/supabase');
+                    const { config } = await import('../../config');
+                    const resp = await authFetch(`${config.apiUrl}/auth/verify`, {
+                        method: 'POST',
+                        body: JSON.stringify({}),
+                    });
+                    if (resp.ok) {
+                        const data2 = await resp.json();
+                        const isComplete = data2?.onboarding?.is_complete;
+                        navigate(isComplete ? '/app' : '/onboarding', { replace: true });
+                    } else {
+                        navigate('/app', { replace: true });
+                    }
+                } catch {
+                    navigate('/app', { replace: true });
+                }
+            }
+        };
+        checkSession();
+    }, [navigate]);
+
+    const handleGetStarted = async () => {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+            try {
+                const { authFetch } = await import('../../lib/supabase');
+                const { config } = await import('../../config');
+                const resp = await authFetch(`${config.apiUrl}/auth/verify`, {
+                    method: 'POST',
+                    body: JSON.stringify({}),
+                });
+                if (resp.ok) {
+                    const data2 = await resp.json();
+                    const isComplete = data2?.onboarding?.is_complete;
+                    navigate(isComplete ? '/app' : '/onboarding');
+                } else {
+                    navigate('/app');
+                }
+            } catch {
+                navigate('/app');
+            }
+        } else {
+            navigate('/login');
+        }
+    };
 
     return (
         <div style={{ background: '#080610', color: '#F0EBF8', minHeight: '100vh', overflowX: 'hidden', fontFamily: 'Inter, sans-serif' }}>

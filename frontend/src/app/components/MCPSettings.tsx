@@ -4,10 +4,10 @@ import {
     Settings, X, Github, Slack, FileSpreadsheet,
     Eye, EyeOff, Save, CheckCircle2, AlertCircle,
     ChevronRight, Zap, Shield, Globe, Database,
-    ToggleLeft, ToggleRight, Library, FileText,
+    ToggleLeft, ToggleRight, Library, FileText, AlertTriangle,
 } from 'lucide-react';
 import { SynthesizedToolsLibrary } from './SynthesizedToolsLibrary';
-import { authFetch } from '../../lib/supabase';
+import { authFetch, supabase } from '../../lib/supabase';
 import { config } from '../../config';
 
 // ──────────────────── Types ─────────────────────────────────────────────────
@@ -298,7 +298,7 @@ function ToolToggleCard({ tool, color, onToggle }: { tool: Tool; color: string; 
 
 // ──────────────────── Slides ─────────────────────────────────────────────────
 
-function EnvironmentSlide({ config, setConfig }: { config: typeof initialEnvConfig; setConfig: React.Dispatch<React.SetStateAction<typeof initialEnvConfig>> }) {
+function EnvironmentSlide({ config, setConfig, onDeleteAccount }: { config: typeof initialEnvConfig; setConfig: React.Dispatch<React.SetStateAction<typeof initialEnvConfig>>, onDeleteAccount: () => void }) {
     const upd = (key: keyof typeof initialEnvConfig) => (v: string) => setConfig(c => ({ ...c, [key]: v }));
 
     const providerColor: Record<string, string> = {
@@ -407,6 +407,39 @@ function EnvironmentSlide({ config, setConfig }: { config: typeof initialEnvConf
                         </FieldRow>
                     </div>
                 )}
+            </SectionBlock>
+
+            <SectionBlock title="Danger Zone" icon={<AlertTriangle className="w-4 h-4" />}>
+                <div style={{
+                    padding: '12px 16px',
+                    background: 'rgba(239,68,68,0.05)',
+                    border: '1px solid rgba(239,68,68,0.2)',
+                    borderRadius: 10,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10
+                }}>
+                    <p style={{ fontSize: 12, color: '#f87171', margin: 0, lineHeight: 1.5 }}>
+                        Deleting your account will permanently wipe your profile, custom credentials, workflow history, and all synthesized tools from MOIRA. This action cannot be undone.
+                    </p>
+                    <button
+                        onClick={onDeleteAccount}
+                        style={{
+                            padding: '8px 16px',
+                            background: '#ef4444',
+                            border: 'none',
+                            borderRadius: 6,
+                            color: '#fff',
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            width: 'fit-content',
+                            transition: 'background 0.2s',
+                        }}
+                    >
+                        Delete Account & Purge Data
+                    </button>
+                </div>
             </SectionBlock>
         </div>
     );
@@ -580,6 +613,36 @@ export function MCPSettings({ open, onClose, onViewGuide, onConfigureConnector }
     });
     const [saved, setSaved] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle');
     const [saveError, setSaveError] = useState('');
+
+    const handleDeleteAccount = async () => {
+        const confirmed = window.confirm(
+            "ARE YOU ABSOLUTELY SURE? This will permanently delete your profile, configurations, workflow history, and all synthesized tools from MOIRA."
+        );
+        if (!confirmed) return;
+        
+        const finalConfirmed = window.confirm(
+            "FINAL WARNING: Your account and ALL associated configurations will be completely erased. Type OK to confirm."
+        );
+        if (!finalConfirmed) return;
+
+        try {
+            const res = await authFetch(`${config.apiUrl}/auth/account`, {
+                method: 'DELETE',
+            });
+            
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData?.detail?.message || errData?.detail || 'Failed to delete account');
+            }
+
+            await supabase.auth.signOut();
+            localStorage.clear();
+            window.location.href = '/login';
+        } catch (err: any) {
+            console.error('[MCPSettings] Account deletion failed:', err);
+            alert(`Account deletion failed: ${err.message}`);
+        }
+    };
 
     // Templates state
     const [templates, setTemplates] = useState<{ id: string; name: string; content: string }[]>(() => {
@@ -822,7 +885,7 @@ export function MCPSettings({ open, onClose, onViewGuide, onConfigureConnector }
                                     transition={{ duration: 0.18 }}
                                 >
                                     {activeTab === 'env' && (
-                                        <EnvironmentSlide config={envConfig} setConfig={setEnvConfig} />
+                                        <EnvironmentSlide config={envConfig} setConfig={setEnvConfig} onDeleteAccount={handleDeleteAccount} />
                                     )}
                                     {activeConnector && (
                                         <ConnectorSlide connector={activeConnector} onChange={handleConnectorChange} envConfig={envConfig} setEnvConfig={setEnvConfig} />

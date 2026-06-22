@@ -22,7 +22,7 @@ PUBLIC_ROUTES = {
     "/api/v1/auth/callback",
 }
 
-PUBLIC_PREFIXES = ("/api/v1/auth/",)
+PUBLIC_PREFIXES = ()
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

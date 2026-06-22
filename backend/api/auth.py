@@ -557,3 +557,114 @@ async def test_connector_config(connector: str, request: Request, user_id: str =
                     )
 
     return result
+
+
+@router.delete("/account")
+async def delete_account(user_id: str = Depends(require_auth)):
+    """
+    Permanently delete the user's entire account, including profile, env configs, 
+    onboarding details, workflows, synthesized tools, and their Supabase Auth record.
+    """
+    logger.info("Purging user account and data", user_id=user_id)
+
+    errors = []
+
+    # 1. Clear database (workflows, synthesized_tools)
+    try:
+        from db.connection import get_pool
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                # Delete user's workflows
+                await conn.execute("DELETE FROM workflows WHERE user_id = $1", user_id)
+                # Delete user's synthesized tools
+                await conn.execute("DELETE FROM synthesized_tools WHERE user_id = $1", user_id)
+            logger.info("Local SQL DB tables cleared for user", user_id=user_id)
+    except Exception as exc:
+        msg = f"Failed to clear SQL database tables: {exc}"
+        logger.error(msg)
+        errors.append(msg)
+
+    # 2. Delete Supabase config/profile records
+    if not _is_mock_mode():
+        try:
+            async with httpx.AsyncClient() as client:
+                # A. Resolve internal profile ID
+                profile_resp = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/user_profiles",
+                    headers=_supa_headers(),
+                    params={"supabase_uid": f"eq.{user_id}", "select": "id"},
+                    timeout=5.0
+                )
+                profiles = profile_resp.json()
+                
+                if profiles:
+                    profile_id = profiles[0]["id"]
+                    
+                    # B. Delete user onboarding
+                    await client.delete(
+                        f"{SUPABASE_URL}/rest/v1/user_onboarding",
+                        headers=_supa_headers(),
+                        params={"user_id": f"eq.{profile_id}"},
+                        timeout=5.0
+                    )
+                    
+                    # C. Delete user configurations
+                    await client.delete(
+                        f"{SUPABASE_URL}/rest/v1/user_env_configs",
+                        headers=_supa_headers(),
+                        params={"user_id": f"eq.{profile_id}"},
+                        timeout=5.0
+                    )
+                    
+                    # D. Delete user profile
+                    await client.delete(
+                        f"{SUPABASE_URL}/rest/v1/user_profiles",
+                        headers=_supa_headers(),
+                        params={"id": f"eq.{profile_id}"},
+                        timeout=5.0
+                    )
+                    logger.info("Supabase profile and configs deleted", user_id=user_id)
+
+                # E. Delete Supabase Auth User via admin endpoint
+                auth_delete_resp = await client.delete(
+                    f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+                    headers=_supa_headers(),
+                    timeout=5.0
+                )
+                if auth_delete_resp.status_code not in (200, 204):
+                    logger.warning("Auth delete status non-success", status=auth_delete_resp.status_code, body=auth_delete_resp.text)
+                    errors.append(f"Failed to delete auth session: {auth_delete_resp.text}")
+                else:
+                    logger.info("Supabase auth user deleted successfully", user_id=user_id)
+
+        except Exception as exc:
+            msg = f"Failed to clear Supabase cloud data: {exc}"
+            logger.error(msg)
+            errors.append(msg)
+    else:
+        # Ephemeral Mock DB removal
+        try:
+            db = _read_mock_db()
+            db["profiles"].pop("dev-user-id", None)
+            db["onboarding"].pop("dev-user-id", None)
+            db["configs"].pop("dev-user-id", None)
+            _write_mock_db(db)
+            logger.info("Mock DB cleared for dev-user-id")
+        except Exception as exc:
+            logger.warning(f"Failed to clear mock db: {exc}")
+
+    # 3. Invalidate configuration cache
+    try:
+        from core.llm_router import invalidate_user_config_cache
+        invalidate_user_config_cache(user_id)
+    except Exception:
+        pass
+
+    if errors:
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Account partial purge completed with errors.", "errors": errors}
+        )
+
+    return {"status": "purged", "message": "All user configurations and data permanently deleted."}
