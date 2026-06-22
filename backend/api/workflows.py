@@ -6,7 +6,8 @@ import asyncio
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
+from core.auth_middleware import require_auth
 
 from api.websocket import broadcast_event, broadcast_raw
 from connectors.github import GitHubConnector
@@ -471,12 +472,23 @@ def signal_credentials_saved(workflow_id: str) -> None:
 # Background execution task
 # ---------------------------------------------------------------------------
 
-async def _run_workflow(workflow_id: str, user_request: str, model_id: str | None = None, disabled_tools: list[str] | None = None, provider: str | None = None) -> None:
+async def _run_workflow(
+    workflow_id: str,
+    user_request: str,
+    model_id: str | None = None,
+    disabled_tools: list[str] | None = None,
+    provider: str | None = None,
+    user_id: str | None = None,
+) -> None:
     # Small delay to allow the frontend WebSocket to connect before we start
     # broadcasting events. Without this, workflow_started fires before the
     # client has subscribed and the DAG init is lost.
     await asyncio.sleep(0.5)
     try:
+        if user_id:
+            from core.llm_router import load_user_ai_config
+            await load_user_ai_config(user_id)
+
         # ── Use the live ConnectorRegistry (includes any synthesized connectors) ──
         live_reg_dict = _get_live_registry()
         reg_obj = get_registry()
@@ -650,12 +662,21 @@ async def _run_workflow(workflow_id: str, user_request: str, model_id: str | Non
 async def create_workflow(
     body: CreateWorkflowRequest,
     background_tasks: BackgroundTasks,
+    user_id: str = Depends(require_auth),
 ) -> dict:
     """Create and immediately start executing a workflow."""
     workflow_id = str(uuid.uuid4())
     await write_workflow(workflow_id, body.user_request, "pending")
 
-    background_tasks.add_task(_run_workflow, workflow_id, body.user_request, body.model_id, body.disabled_tools, body.provider)
+    background_tasks.add_task(
+        _run_workflow,
+        workflow_id,
+        body.user_request,
+        body.model_id,
+        body.disabled_tools,
+        body.provider,
+        user_id=user_id,
+    )
 
     logger.info("Workflow created", workflow_id=workflow_id)
     return {"workflow_id": workflow_id, "status": "pending", "message": "Workflow started"}

@@ -473,6 +473,45 @@ async def test_connector_config(connector: str, request: Request, user_id: str =
                 else:
                     result["message"] = "Invalid Slack webhook URL"
 
+        elif connector == "ai":
+            provider = config_data.get("ACTIVE_PROVIDER", "nvidia").lower().strip()
+            api_key = config_data.get("AI_API_KEY", "")
+            model = config_data.get("AI_MODEL", "")
+            base_urls = {
+                "nvidia": "https://integrate.api.nvidia.com/v1",
+                "groq": "https://api.groq.com/openai/v1",
+                "openrouter": "https://openrouter.ai/api/v1",
+                "lmstudio": "http://localhost:1234/v1"
+            }
+            default_models = {
+                "nvidia": "meta/llama-3.3-70b-instruct",
+                "groq": "llama-3.3-70b-versatile",
+                "openrouter": "meta-llama/llama-3.3-70b-instruct:free",
+                "lmstudio": "local-model"
+            }
+            url = base_urls.get(provider, base_urls["nvidia"])
+            mdl = model or default_models.get(provider, default_models["nvidia"])
+            
+            # LM Studio doesn't require real key or external network request
+            if provider == "lmstudio":
+                result = {"connector": connector, "success": True, "message": "Successfully connected to local LM Studio!"}
+            else:
+                async with httpx.AsyncClient() as c:
+                    r = await c.post(
+                        f"{url}/chat/completions",
+                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                        json={
+                            "model": mdl,
+                            "messages": [{"role": "user", "content": "hello"}],
+                            "max_tokens": 5
+                        },
+                        timeout=8
+                    )
+                    if r.status_code == 200:
+                        result = {"connector": connector, "success": True, "message": f"Successfully connected to {provider.upper()}!"}
+                    else:
+                        result["message"] = f"Failed to connect to {provider.upper()} (HTTP {r.status_code}): {r.text[:80]}"
+
         else:
             result = {"connector": connector, "success": True, "message": "Config saved (no live test available)"}
 

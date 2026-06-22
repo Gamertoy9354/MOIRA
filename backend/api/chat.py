@@ -5,9 +5,10 @@ Classifies user intent as CHAT or EXECUTE and responds accordingly.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
+from core.auth_middleware import require_auth
 
 from utils.config import get_settings
 from utils.logger import get_logger
@@ -63,14 +64,15 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest, user_id: str = Depends(require_auth)) -> ChatResponse:
     """
     Intent-aware chat endpoint.
     Returns mode='chat' for conversational queries (direct LLM reply).
     Returns mode='execution' if request requires workflow execution.
     """
     try:
-        from core.llm_router import get_llm_client
+        from core.llm_router import get_llm_client, load_user_ai_config
+        await load_user_ai_config(user_id)
         client, model = get_llm_client(
             provider=req.provider,
             model_id=req.model_id,

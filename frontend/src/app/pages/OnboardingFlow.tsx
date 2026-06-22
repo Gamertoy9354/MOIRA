@@ -9,6 +9,7 @@ import { config } from '../../config';
 
 const STEPS = [
     { id: 'welcome', title: 'Welcome to MOIRA', icon: 'Ω' },
+    { id: 'ai', title: 'AI Provider', icon: '🧠' },
     { id: 'github', title: 'GitHub', icon: '🐙' },
     { id: 'jira', title: 'Jira', icon: '🔷' },
     { id: 'slack', title: 'Slack', icon: '💬' },
@@ -19,6 +20,27 @@ const STEPS = [
 // ── Connector field configs ───────────────────────────────────────────────────
 
 const CONNECTOR_FIELDS: Record<string, Array<{ key: string; label: string; hint: string; url?: string; urlLabel?: string; secret?: boolean; required?: boolean }>> = {
+    ai: [
+        {
+            key: 'ACTIVE_PROVIDER',
+            label: 'AI Provider',
+            hint: 'Choose: nvidia, groq, openrouter, or lmstudio',
+            required: true,
+        },
+        {
+            key: 'AI_API_KEY',
+            label: 'API Key',
+            hint: 'Enter the API key for your chosen provider (or "lm-studio" for LM Studio)',
+            secret: true,
+            required: true,
+        },
+        {
+            key: 'AI_MODEL',
+            label: 'Model ID (Optional)',
+            hint: 'Override the default model (e.g. meta/llama-3.3-70b-instruct)',
+            required: false,
+        },
+    ],
     github: [
         {
             key: 'GITHUB_TOKEN',
@@ -179,6 +201,7 @@ function ConnectorStep({ connector, onNext, onSkip, stepIdx }: {
     };
 
     const stepInfo: Record<string, { why: string; optional: boolean }> = {
+        ai: { why: 'Connect your own AI key so MOIRA can plan workflows and synthesize tools using your own AI budget.', optional: false },
         github: { why: 'Lets MOIRA read PRs, issues, repos, and trigger workflows on your behalf.', optional: false },
         jira: { why: 'Allows MOIRA to create/update Jira tickets and track project progress automatically.', optional: false },
         slack: { why: 'MOIRA sends real-time workflow updates and alerts to your Slack channels.', optional: true },
