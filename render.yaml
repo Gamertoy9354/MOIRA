@@ -5,29 +5,32 @@ services:
     plan: free
     ipAllowList: [] # Allow internal traffic only
 
-  # 2. Backend Web Service (FastAPI)
+  # 2. Combined Backend + Frontend Web Service
+  #    The React frontend is built during the build step, then served by FastAPI's
+  #    StaticFiles mount in main.py. This ensures window.location.origin/api/v1
+  #    always resolves to the correct backend URL on the same domain.
   - type: web
     name: moira-backend
     runtime: python
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: >-
+      pip install -r backend/requirements.txt &&
+      cd frontend && npm ci && npm run build && cd ..
     startCommand: cd backend && python main.py
     plan: free
+    domains:
+      - moira.sinaai.in
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
 
-      # Automatically binds the connection string from the moira-redis service
+      # Redis connection (auto-bound from the moira-redis service above)
       - key: REDIS_URL
         fromService:
           type: redis
           name: moira-redis
           property: connectionString
 
-      # Supabase Connection URL (postgres connection string)
-      - key: DATABASE_URL
-        sync: false
-
-      # Supabase Client Credentials
+      # ── Supabase (set these manually in the Render dashboard) ────────────────
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
@@ -37,7 +40,7 @@ services:
       - key: SUPABASE_JWT_SECRET
         sync: false
 
-      # AI Provider configuration
+      # ── AI Provider ──────────────────────────────────────────────────────────
       - key: ACTIVE_PROVIDER
         value: nvidia
       - key: NVIDIA_API_KEY
@@ -46,31 +49,27 @@ services:
         value: https://integrate.api.nvidia.com/v1
       - key: NVIDIA_MODEL
         value: meta/llama-3.3-70b-instruct
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: OPENROUTER_MODEL
+        value: meta-llama/llama-3.3-70b-instruct:free
 
-      # Application Config
+      # ── App Settings ─────────────────────────────────────────────────────────
       - key: DEBUG
         value: "false"
       - key: APP_HOST
         value: 0.0.0.0
 
-  # 3. Static Frontend (Vite)
-  - type: web
-    name: moira-frontend
-    runtime: static
-    buildCommand: cd frontend && npm ci && npm run build
-    staticPublishPath: ./frontend/dist
-    domains:
-      - moira.sinaai.in
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
+      # ── Vite Frontend build-time env vars ────────────────────────────────────
+      # These are baked into the React bundle at build time by Vite.
+      # Must be set in the Render dashboard before deploying.
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
-        sync: false
-      - key: VITE_API_URL
-        sync: false
-      - key: VITE_WS_URL
         sync: false
