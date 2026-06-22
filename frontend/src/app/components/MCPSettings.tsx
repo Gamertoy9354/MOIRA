@@ -613,6 +613,7 @@ export function MCPSettings({ open, onClose, onViewGuide, onConfigureConnector }
     });
     const [saved, setSaved] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle');
     const [saveError, setSaveError] = useState('');
+    const [backendSyncMsg, setBackendSyncMsg] = useState('');
 
     const handleDeleteAccount = async () => {
         const confirmed = window.confirm(
@@ -700,25 +701,35 @@ export function MCPSettings({ open, onClose, onViewGuide, onConfigureConnector }
     const handleSave = async () => {
         setSaved('saving');
         setSaveError('');
+        setBackendSyncMsg('');
+
+        // 1. Always save to localStorage first — this ALWAYS works
         const disabledTools = connectors.flatMap(c => c.tools.filter(t => !t.enabled).map(t => `${c.id}.${t.id}`));
         localStorage.setItem('mcp_disabled_tools', JSON.stringify(disabledTools));
         localStorage.setItem('mcp_env_config', JSON.stringify(envConfig));
 
-        // Hot-reload backend via settings API
+        // 2. Show success immediately — localStorage save succeeded
+        setSaved('ok');
+        setTimeout(() => setSaved('idle'), 3000);
+
+        // 3. Try to sync to backend in background (best-effort, non-blocking)
         try {
             const res = await authFetch(`${config.apiUrl}/settings/env`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ values: envConfig }),
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            setSaved('ok');
+            if (res.ok) {
+                console.log('[MCPSettings] Settings synced to backend successfully');
+                setBackendSyncMsg('');
+            } else {
+                console.warn('[MCPSettings] Backend sync returned', res.status);
+                setBackendSyncMsg('Saved locally — backend sync pending.');
+            }
         } catch (err) {
-            console.error('[MCPSettings] Hot-reload failed:', err);
-            setSaveError('Backend unreachable — saved locally only.');
-            setSaved('error');
+            console.warn('[MCPSettings] Backend sync skipped (unreachable):', err);
+            setBackendSyncMsg('Saved locally — backend sync pending.');
         }
-        setTimeout(() => setSaved('idle'), 3000);
     };
 
     const activeConnector = connectors.find(c => c.id === activeTab);
@@ -1057,14 +1068,19 @@ export function MCPSettings({ open, onClose, onViewGuide, onConfigureConnector }
                             flexShrink: 0,
                         }}>
                             <div style={{ marginRight: 'auto' }}>
-                                {saved === 'error' && (
-                                    <span style={{ fontSize: 11.5, color: '#fbbf24' }}>
-                                        ⚠ {saveError || 'Backend unreachable — saved locally only.'}
+                                {backendSyncMsg && saved === 'idle' && (
+                                    <span style={{ fontSize: 11.5, color: 'rgba(251,191,36,0.7)' }}>
+                                        ℹ {backendSyncMsg}
                                     </span>
                                 )}
-                                {saved === 'idle' && (
+                                {saved === 'error' && (
+                                    <span style={{ fontSize: 11.5, color: '#fbbf24' }}>
+                                        ⚠ {saveError}
+                                    </span>
+                                )}
+                                {!backendSyncMsg && saved === 'idle' && (
                                     <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.25)' }}>
-                                        Changes are saved to your local .env configuration
+                                        Settings are saved per-browser and synced to backend
                                     </span>
                                 )}
                             </div>

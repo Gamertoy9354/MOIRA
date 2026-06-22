@@ -34,7 +34,7 @@ def _supa_headers() -> dict:
 
 
 def _is_mock_mode() -> bool:
-    return not SUPABASE_URL or not SUPABASE_SERVICE_KEY or "YOUR_SUPABASE" in SUPABASE_SERVICE_KEY or os.getenv("DEBUG", "true").lower() == "true"
+    return not SUPABASE_URL or not SUPABASE_SERVICE_KEY or "YOUR_SUPABASE" in SUPABASE_SERVICE_KEY
 
 
 class EnvUpdateRequest(BaseModel):
