@@ -97,7 +97,7 @@ Reasoning: {gap.reasoning}
 2. Implement get_connector_name(), get_scoped_permissions(), list_tools(), invoke()
 3. list_tools() MUST return a list of tool dicts matching the reference format
 4. Use httpx.AsyncClient for all HTTP calls (it is already in requirements.txt)
-5. Read all credentials from environment variables via os.environ.get() — NEVER hardcode secrets
+5. Read all credentials dynamically at call-time using the get_credential(env_var_name) helper imported from utils.config (e.g. `from utils.config import get_credential` and then call `get_credential("VAR_NAME")`) — NEVER use os.environ.get() directly and NEVER hardcode secrets
 6. Handle 401/403 → MCPPermissionError, 404 → MCPNotFoundError, 429 → MCPRateLimitError, 5xx → MCPTransientError
 
 ## Output Format
@@ -172,12 +172,13 @@ class ToolSynthesizer:
         self,
         gaps: list[ToolGap],
         workflow_id: str,
+        user_id: str | None = None,
     ) -> list[str]:
         """Synthesize connectors for every gap. Returns list of synthesized service names."""
         synthesized: list[str] = []
         for gap in gaps:
             try:
-                service = await self.synthesize_one(gap, workflow_id)
+                service = await self.synthesize_one(gap, workflow_id, user_id=user_id)
                 if service:
                     synthesized.append(service)
             except Exception as exc:
@@ -192,11 +193,15 @@ class ToolSynthesizer:
         self,
         gap: ToolGap,
         workflow_id: str,
+        user_id: str | None = None,
     ) -> str | None:
         """
         Full synthesis pipeline for one gap.
         Returns service_name on success, None on failure.
         """
+        if user_id:
+            clean_user_id = user_id.replace("-", "_")
+            gap.suggested_service = f"{gap.suggested_service}_{clean_user_id}"
         service = gap.suggested_service
 
         # ── Already synthesized? Skip. ──────────────────────────────────
@@ -321,6 +326,7 @@ class ToolSynthesizer:
                 service, connector_class_name, str(disk_path),
                 tools_meta, required_creds, prompt, raw_response,
                 {"blocked_patterns": blocked_patterns}, False, workflow_id,
+                user_id=user_id,
             )
             return None
 
@@ -351,6 +357,7 @@ class ToolSynthesizer:
             service, connector_class_name, str(disk_path),
             tools_meta, required_creds, prompt, raw_response,
             {"passed": True}, True, workflow_id,
+            user_id=user_id,
         )
 
         # ── Emit tool_synthesized ───────────────────────────────────────
@@ -543,6 +550,7 @@ class ToolSynthesizer:
         safety_result: dict,
         validation_passed: bool,
         workflow_id: str,
+        user_id: str | None = None,
     ) -> None:
         try:
             from db.connection import get_pool
@@ -561,6 +569,7 @@ class ToolSynthesizer:
                         safety_scan_result=safety_result,
                         validation_passed=validation_passed,
                         workflow_id=workflow_id,
+                        user_id=user_id,
                     )
                     logger.info("Synthesized tool persisted to Redis", service=service_name)
                 return
@@ -572,8 +581,8 @@ class ToolSynthesizer:
                         tools, required_credentials,
                         synthesis_prompt, raw_kimi_response,
                         safety_scan_result, validation_passed,
-                        created_by_workflow_id
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid)
+                        created_by_workflow_id, user_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid, $11)
                     ON CONFLICT (service_name) DO UPDATE SET
                         connector_class_name = EXCLUDED.connector_class_name,
                         file_path = EXCLUDED.file_path,
@@ -582,7 +591,8 @@ class ToolSynthesizer:
                         synthesis_prompt = EXCLUDED.synthesis_prompt,
                         raw_kimi_response = EXCLUDED.raw_kimi_response,
                         safety_scan_result = EXCLUDED.safety_scan_result,
-                        validation_passed = EXCLUDED.validation_passed
+                        validation_passed = EXCLUDED.validation_passed,
+                        user_id = EXCLUDED.user_id
                     """,
                     service_name,
                     class_name,
@@ -594,6 +604,7 @@ class ToolSynthesizer:
                     json.dumps(safety_result),
                     validation_passed,
                     workflow_id if workflow_id else None,
+                    user_id,
                 )
             logger.info("Synthesized tool persisted to DB", service=service_name)
         except Exception as exc:

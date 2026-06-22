@@ -127,9 +127,10 @@ class ToolGapDetector:
         self,
         workflow_description: str,
         workflow_id: str,
+        user_id: str | None = None,
     ) -> ToolGapReport:
         """Return a :class:`ToolGapReport` for the given workflow description."""
-        all_tools: list[ToolDefinition] = await self._registry.list_all_tools()
+        all_tools: list[ToolDefinition] = await self._registry.list_all_tools(user_id=user_id)
         available_tools = [t for t in all_tools if f"{t.connector}.{t.name}" not in self.disabled_tools]
 
         compact = [

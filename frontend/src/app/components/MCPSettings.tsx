@@ -7,6 +7,8 @@ import {
     ToggleLeft, ToggleRight, Library, FileText,
 } from 'lucide-react';
 import { SynthesizedToolsLibrary } from './SynthesizedToolsLibrary';
+import { authFetch } from '../../lib/supabase';
+import { config } from '../../config';
 
 // ──────────────────── Types ─────────────────────────────────────────────────
 interface Tool {
@@ -673,7 +675,7 @@ export function MCPSettings({ open, onClose, onViewGuide, onConfigureConnector }
         if (!open) return;
         const fetchSettings = async () => {
             try {
-                const res = await fetch('http://localhost:8001/api/v1/settings/env');
+                const res = await authFetch(`${config.apiUrl}/settings/env`);
                 if (res.ok) {
                     const data = await res.json();
                     setEnvConfig((c: typeof initialEnvConfig) => ({
@@ -697,7 +699,7 @@ export function MCPSettings({ open, onClose, onViewGuide, onConfigureConnector }
 
         // Hot-reload backend via settings API
         try {
-            const res = await fetch('http://localhost:8001/api/v1/settings/env', {
+            const res = await authFetch(`${config.apiUrl}/settings/env`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ values: envConfig }),

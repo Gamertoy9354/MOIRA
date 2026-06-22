@@ -114,10 +114,18 @@ class ConnectorRegistry:
     # Tool enumeration
     # ------------------------------------------------------------------
 
-    async def list_all_tools(self) -> list[ToolDefinition]:
+    async def list_all_tools(self, user_id: str | None = None) -> list[ToolDefinition]:
         """Return flat list of all tools across all registered connectors."""
         all_tools: list[ToolDefinition] = []
+        clean_user_id = user_id.replace("-", "_") if user_id else None
+        suffix = f"_{clean_user_id}" if clean_user_id else None
+
         for connector_name, connector in self._connectors.items():
+            if suffix:
+                is_builtin = connector_name in ("github", "slack", "sheets", "database", "jira")
+                is_user_synth = connector_name.endswith(suffix)
+                if not is_builtin and not is_user_synth:
+                    continue
             try:
                 tools = await connector.list_tools()
                 for t in tools:

@@ -17,6 +17,7 @@ import os
 import httpx
 from openai import AsyncOpenAI
 
+import time
 from utils.config import get_settings
 from utils.logger import get_logger
 
@@ -25,6 +26,15 @@ logger = get_logger(__name__)
 # ContextVar to store user-specific AI settings
 # Format: {"provider": str, "api_key": str, "model": str | None}
 user_ai_config = contextvars.ContextVar("user_ai_config", default=None)
+
+# In-memory cache for user configurations: user_id -> (timestamp, credentials_overrides, ai_config_data)
+_user_config_cache: dict[str, tuple[float, dict, dict]] = {}
+_CACHE_TTL = 30.0  # seconds
+
+def invalidate_user_config_cache(user_id: str) -> None:
+    """Invalidate the cached configuration for a specific user."""
+    _user_config_cache.pop(user_id, None)
+    logger.info("Invalidated configuration cache for user", user_id=user_id)
 
 # Provider base URLs
 _PROVIDER_URLS: dict[str, str] = {
@@ -44,7 +54,17 @@ _DEFAULT_MODELS: dict[str, str] = {
 
 
 async def load_user_ai_config(user_id: str) -> None:
-    """Fetch user's custom AI API configuration and set it in the ContextVar."""
+    """Fetch user's custom configurations (AI and connectors) and set ContextVars."""
+    # 1. Check TTL cache
+    now = time.time()
+    if user_id in _user_config_cache:
+        cached_time, cached_creds, cached_ai = _user_config_cache[user_id]
+        if now - cached_time < _CACHE_TTL:
+            from utils.config import user_credentials
+            user_credentials.set(cached_creds)
+            user_ai_config.set(cached_ai)
+            return
+
     settings = get_settings()
     
     # Determine if we are in mock mode
@@ -52,26 +72,14 @@ async def load_user_ai_config(user_id: str) -> None:
     supabase_key = settings.supabase_service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     is_mock = not supabase_url or not supabase_key or "YOUR_SUPABASE" in supabase_key or os.getenv("DEBUG", "true").lower() == "true"
     
-    config_data = {}
+    from utils.config import user_credentials
+    credentials_overrides = {}
+    ai_config_data = {}
     
     if is_mock:
-        # Read from local mock DB file
-        mock_db_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scratch_db.json")
-        if os.path.exists(mock_db_file):
-            try:
-                with open(mock_db_file, "r", encoding="utf-8") as f:
-                    db = json.load(f)
-                    configs = db.get("configs", {})
-                    user_configs = configs.get("dev-user-id") or configs.get(user_id) or {}
-                    ai_connector = user_configs.get("ai")
-                    if ai_connector and ai_connector.get("is_configured"):
-                        config_data = {
-                            "ACTIVE_PROVIDER": os.getenv("ACTIVE_PROVIDER"),
-                            "AI_API_KEY": os.getenv("AI_API_KEY") or os.getenv("NVIDIA_API_KEY"),
-                            "AI_MODEL": os.getenv("AI_MODEL")
-                        }
-            except Exception as e:
-                logger.warning("Failed to load user AI config from mock DB", error=str(e))
+        # In mock mode, credentials are loaded directly from local .env / environment variables.
+        # But we can also set the ContextVar to check them just in case.
+        pass
     else:
         # Read from Supabase production DB
         try:
@@ -92,32 +100,55 @@ async def load_user_ai_config(user_id: str) -> None:
                     profiles = profile_resp.json()
                     if profiles:
                         profile_id = profiles[0]["id"]
-                        # 2. Get the custom ai connector config
+                        
+                        # 2. Get all custom connector configs for this user
                         config_resp = await client.get(
                             f"{supabase_url}/rest/v1/user_env_configs",
                             headers=headers,
-                            params={"user_id": f"eq.{profile_id}", "connector_name": "eq.ai", "select": "config_data"},
+                            params={"user_id": f"eq.{profile_id}", "select": "connector_name,config_data"},
                             timeout=5.0
                         )
                         if config_resp.status_code == 200:
                             configs = config_resp.json()
-                            if configs:
-                                config_data = configs[0].get("config_data", {})
+                            for cfg in configs:
+                                conn_name = cfg.get("connector_name")
+                                conn_data = cfg.get("config_data", {})
+                                if conn_name == "ai":
+                                    ai_config_data = conn_data
+                                # Merge all settings dynamically
+                                for k, v in conn_data.items():
+                                    credentials_overrides[k.lower()] = v
         except Exception as e:
-            logger.warning("Failed to fetch user AI config from Supabase", error=str(e))
+            logger.warning("Failed to fetch user configurations from Supabase", error=str(e))
 
-    if config_data:
-        provider = config_data.get("ACTIVE_PROVIDER", "").lower().strip()
-        api_key = config_data.get("AI_API_KEY", "")
-        model = config_data.get("AI_MODEL", "")
+    # Set user credentials contextvar
+    if credentials_overrides:
+        user_credentials.set(credentials_overrides)
+        logger.info("ContextVar user_credentials set successfully with overrides", keys=list(credentials_overrides.keys()))
+    else:
+        user_credentials.set(None)
+
+    # Set user LLM contextvar (backwards compatibility for KimiPlanner)
+    ai_cfg = None
+    if ai_config_data:
+        provider = ai_config_data.get("ACTIVE_PROVIDER", "").lower().strip()
+        api_key = ai_config_data.get("AI_API_KEY", "")
+        model = ai_config_data.get("AI_MODEL", "")
         
         if provider and api_key:
-            user_ai_config.set({
+            ai_cfg = {
                 "provider": provider,
                 "api_key": api_key,
                 "model": model or None
-            })
+            }
+            user_ai_config.set(ai_cfg)
             logger.info("ContextVar user_ai_config set successfully", provider=provider, model=model)
+    
+    if ai_cfg is None:
+        user_ai_config.set(None)
+
+    # Populate cache
+    _user_config_cache[user_id] = (time.time(), credentials_overrides, ai_cfg)
 
 
 def get_llm_client(

@@ -80,6 +80,30 @@ def _get_live_registry() -> dict:
         }
 
 
+def _get_user_registry(user_id: str | None) -> dict:
+    """Return a registry dictionary containing only built-in connectors and the user's synthesized connectors."""
+    live_dict = _get_live_registry()
+    if not user_id:
+        return live_dict
+    clean_user_id = user_id.replace("-", "_")
+    suffix = f"_{clean_user_id}"
+    
+    filtered = {}
+    for name, conn in live_dict.items():
+        if name in ("github", "slack", "sheets", "database", "jira"):
+            filtered[name] = conn
+        elif name.endswith(suffix):
+            filtered[name] = conn
+    return filtered
+
+
+async def _check_workflow_owner(workflow_id: str, user_id: str) -> None:
+    """Helper to verify a workflow belongs to the active user."""
+    row = await get_workflow(workflow_id)
+    if not row or row.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
+
+
 # For backward-compat: keep the module-level _registry pointing at the
 # singleton dict so that Google Sheets helpers still work at import time.
 class RegistryProxy(dict):
@@ -489,8 +513,8 @@ async def _run_workflow(
             from core.llm_router import load_user_ai_config
             await load_user_ai_config(user_id)
 
-        # ── Use the live ConnectorRegistry (includes any synthesized connectors) ──
-        live_reg_dict = _get_live_registry()
+        # ── Use the user-filtered ConnectorRegistry ──
+        live_reg_dict = _get_user_registry(user_id)
         reg_obj = get_registry()
 
         planner = KimiPlanner(model_id=model_id, provider=provider)
@@ -500,7 +524,7 @@ async def _run_workflow(
 
         # ── Step 1: Tool Gap Detection ──────────────────────────────────────
         detector = ToolGapDetector(registry=reg_obj, model_id=model_id, disabled_tools=disabled_tools, provider=provider)
-        gap_report = await detector.analyze(user_request, workflow_id)
+        gap_report = await detector.analyze(user_request, workflow_id, user_id=user_id)
 
         # Emit tool_gap_detected event (always, so frontend knows coverage)
         await broadcast_raw({
@@ -535,7 +559,7 @@ async def _run_workflow(
                 model_id=model_id,
             )
             synthesized_services = await synthesizer.synthesize_all(
-                gap_report.gaps, workflow_id
+                gap_report.gaps, workflow_id, user_id=user_id
             )
 
             if synthesized_services:
@@ -594,7 +618,7 @@ async def _run_workflow(
                         )
 
                 # Refresh registry dict after creds are in
-                live_reg_dict = _get_live_registry()
+                live_reg_dict = _get_user_registry(user_id)
 
         # ── Step 3: Normal DAG Planning ─────────────────────────────────────
         available_tools = await KimiPlanner.collect_tools(live_reg_dict)
@@ -666,7 +690,7 @@ async def create_workflow(
 ) -> dict:
     """Create and immediately start executing a workflow."""
     workflow_id = str(uuid.uuid4())
-    await write_workflow(workflow_id, body.user_request, "pending")
+    await write_workflow(workflow_id, body.user_request, "pending", user_id=user_id)
 
     background_tasks.add_task(
         _run_workflow,
@@ -682,8 +706,12 @@ async def create_workflow(
     return {"workflow_id": workflow_id, "status": "pending", "message": "Workflow started"}
 
 
-async def _run_workflow_retry(workflow_id: str) -> None:
+async def _run_workflow_retry(workflow_id: str, user_id: str) -> None:
     try:
+        if user_id:
+            from core.llm_router import load_user_ai_config
+            await load_user_ai_config(user_id)
+
         dag = _active_dags.get(workflow_id)
         if not dag:
             return
@@ -700,12 +728,13 @@ async def _run_workflow_retry(workflow_id: str) -> None:
         circuit_breaker = CircuitBreaker()
         context_resolver = ContextResolver()
 
-        available_tools = await KimiPlanner.collect_tools(_registry)
-        safeguard = MCPSafeGuard(_registry)
+        user_reg = _get_user_registry(user_id)
+        available_tools = await KimiPlanner.collect_tools(user_reg)
+        safeguard = MCPSafeGuard(user_reg)
         recovery_handler = RecoveryHandler(planner, dag_builder)
 
         executor = DAGExecutor(
-            connector_registry=_registry,
+            connector_registry=user_reg,
             safeguard=safeguard,
             recovery_handler=recovery_handler,
             circuit_breaker=circuit_breaker,
@@ -736,18 +765,21 @@ async def _run_workflow_retry(workflow_id: str) -> None:
 async def retry_workflow(
     workflow_id: str,
     background_tasks: BackgroundTasks,
+    user_id: str = Depends(require_auth),
 ) -> dict:
     """Retry a failed workflow directly from memory."""
+    await _check_workflow_owner(workflow_id, user_id)
     if workflow_id not in _active_dags:
         raise HTTPException(status_code=404, detail="Workflow not completely in-memory")
     
-    background_tasks.add_task(_run_workflow_retry, workflow_id)
+    background_tasks.add_task(_run_workflow_retry, workflow_id, user_id)
     return {"message": "Retrying workflow", "workflow_id": workflow_id}
 
 
 @router.delete("/workflows/{workflow_id}", status_code=200)
-async def kill_workflow(workflow_id: str) -> dict:
+async def kill_workflow(workflow_id: str, user_id: str = Depends(require_auth)) -> dict:
     """Immediately terminate a running workflow."""
+    await _check_workflow_owner(workflow_id, user_id)
     _killed_workflows.add(workflow_id)
     _paused_workflows.discard(workflow_id)  # un-pause if paused
 
@@ -766,8 +798,9 @@ async def kill_workflow(workflow_id: str) -> dict:
 
 
 @router.post("/workflows/{workflow_id}/pause", status_code=200)
-async def pause_workflow(workflow_id: str) -> dict:
+async def pause_workflow(workflow_id: str, user_id: str = Depends(require_auth)) -> dict:
     """Pause a running workflow — it will stop after the current step."""
+    await _check_workflow_owner(workflow_id, user_id)
     _paused_workflows.add(workflow_id)
     await broadcast_raw({
         "event_type": "workflow_paused",
@@ -778,8 +811,9 @@ async def pause_workflow(workflow_id: str) -> dict:
 
 
 @router.post("/workflows/{workflow_id}/resume", status_code=200)
-async def resume_workflow(workflow_id: str) -> dict:
+async def resume_workflow(workflow_id: str, user_id: str = Depends(require_auth)) -> dict:
     """Resume a paused workflow."""
+    await _check_workflow_owner(workflow_id, user_id)
     _paused_workflows.discard(workflow_id)
     await broadcast_raw({
         "event_type": "workflow_resumed",
@@ -790,8 +824,9 @@ async def resume_workflow(workflow_id: str) -> dict:
 
 
 @router.get("/workflows/{workflow_id}")
-async def get_workflow_state(workflow_id: str) -> dict:
+async def get_workflow_state(workflow_id: str, user_id: str = Depends(require_auth)) -> dict:
     """Return current workflow state including live DAG."""
+    await _check_workflow_owner(workflow_id, user_id)
     # Check in-memory first (most up-to-date during execution)
     if workflow_id in _active_dags:
         dag = _active_dags[workflow_id]
@@ -805,8 +840,9 @@ async def get_workflow_state(workflow_id: str) -> dict:
 
 
 @router.post("/workflows/{workflow_id}/approve")
-async def approve_step(workflow_id: str, body: ApprovalRequest) -> dict:
+async def approve_step(workflow_id: str, body: ApprovalRequest, user_id: str = Depends(require_auth)) -> dict:
     """Resolve a pending human approval gate."""
+    await _check_workflow_owner(workflow_id, user_id)
     event_key = f"{workflow_id}:{body.step_id}"
     event = _approval_events.get(event_key)
 
@@ -838,8 +874,9 @@ async def approve_step(workflow_id: str, body: ApprovalRequest) -> dict:
 
 
 @router.get("/workflows/{workflow_id}/audit")
-async def get_workflow_audit(workflow_id: str) -> dict:
+async def get_workflow_audit(workflow_id: str, user_id: str = Depends(require_auth)) -> dict:
     """Return the full audit log for a workflow."""
+    await _check_workflow_owner(workflow_id, user_id)
     entries = await get_audit_log(workflow_id)
     # Serialize datetime values
     for e in entries:
@@ -850,13 +887,15 @@ async def get_workflow_audit(workflow_id: str) -> dict:
 
 
 @router.get("/workflows")
-async def list_all_workflows() -> dict:
+async def list_all_workflows(user_id: str = Depends(require_auth)) -> dict:
     """Return all workflows (in-memory + DB)."""
     from db.audit import _memory_store
     workflows = []
 
     # In-memory (includes active and recently completed)
     for wf_id, wf in _memory_store["workflows"].items():
+        if wf.get("user_id") != user_id:
+            continue
         dag = _active_dags.get(wf_id)
         created = wf.get("updated_at", "")
         entry = {
@@ -890,7 +929,8 @@ async def list_all_workflows() -> dict:
         try:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT id, user_request, status, created_at FROM workflows ORDER BY created_at DESC LIMIT 100"
+                    "SELECT id, user_request, status, created_at FROM workflows WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100",
+                    user_id
                 )
                 mem_ids = {w["id"] for w in workflows}
                 for row in rows:
@@ -908,7 +948,7 @@ async def list_all_workflows() -> dict:
         try:
             from db.redis_db import is_redis_available, redis_list_workflows
             if await is_redis_available():
-                redis_wfs = await redis_list_workflows()
+                redis_wfs = await redis_list_workflows(user_id)
                 mem_ids = {w["id"] for w in workflows}
                 for row in redis_wfs:
                     if str(row["id"]) not in mem_ids:
@@ -927,9 +967,10 @@ async def list_all_workflows() -> dict:
 
 
 @router.get("/tools")
-async def list_tools() -> dict:
+async def list_tools(user_id: str = Depends(require_auth)) -> dict:
     """Return all available MCP tools across all connectors."""
-    all_tools = await KimiPlanner.collect_tools(_registry)
+    user_reg = _get_user_registry(user_id)
+    all_tools = await KimiPlanner.collect_tools(user_reg)
     return {"tools": all_tools, "total": len(all_tools)}
 
 

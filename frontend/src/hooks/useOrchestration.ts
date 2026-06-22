@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { orchestrationService } from '../services/orchestration';
+import { authFetch } from '../lib/supabase';
 import { Message, DAGNode, AuditEntry, OrchestrationEvent, TerminalLine, MessageMode } from '../services/types';
 
 export function useOrchestration() {
@@ -114,7 +115,7 @@ export function useOrchestration() {
         // PDF — fetch ALL workflows and generate a full audit report
         try {
             const { config } = await import('../config');
-            const r = await fetch(`${config.apiUrl}/workflows`);
+            const r = await authFetch(`${config.apiUrl}/workflows`);
             const data = await r.json();
             const allWorkflows: any[] = data.workflows || [];
 

@@ -27,11 +27,20 @@ class GitHubConnector(MCPConnector):
     """Connector that exposes GitHub operations as MCP tools."""
 
     def __init__(self) -> None:
-        settings = get_settings()
-        self._token = settings.github_token
-        self._default_owner = settings.github_default_repo_owner
-        self._headers = {
-            "Authorization": f"Bearer {self._token}",
+        pass
+
+    @property
+    def token(self) -> str:
+        return get_settings().github_token
+
+    @property
+    def default_owner(self) -> str:
+        return get_settings().github_default_repo_owner
+
+    @property
+    def headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self.token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
@@ -165,7 +174,7 @@ class GitHubConnector(MCPConnector):
         **kwargs: Any,
     ) -> dict:
         url = f"{_GITHUB_BASE}{path}"
-        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+        async with httpx.AsyncClient(headers=self.headers, timeout=30) as client:
             resp = await client.request(method, url, **kwargs)
 
         if resp.status_code == 401 or resp.status_code == 403:
@@ -201,8 +210,8 @@ class GitHubConnector(MCPConnector):
 
     def _resolve_repo(self, repo: str) -> str:
         """Ensure repo format is owner/repo. Prepend default owner if missing."""
-        if "/" not in repo and self._default_owner:
-            return f"{self._default_owner}/{repo}"
+        if "/" not in repo and self.default_owner:
+            return f"{self.default_owner}/{repo}"
         return repo
 
     async def _get_repo_info(self, params: dict) -> dict:

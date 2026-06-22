@@ -1,5 +1,6 @@
 import { OrchestrationProvider, OrchestrationEvent, DAGNode, TerminalLine, TerminalLevel } from './types';
 import { config } from '../config';
+import { authFetch } from '../lib/supabase';
 
 export class WebSocketProvider implements OrchestrationProvider {
     private ws: WebSocket | null = null;
@@ -52,7 +53,7 @@ export class WebSocketProvider implements OrchestrationProvider {
 
         try {
             // ── Intent classification: try /chat first for conversational queries ──
-            const chatRes = await fetch(`${config.apiUrl}/chat`, {
+            const chatRes = await authFetch(`${config.apiUrl}/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text, model_id: this.selectedModelId, provider: this.selectedProvider })
@@ -91,7 +92,7 @@ export class WebSocketProvider implements OrchestrationProvider {
                 }
             } catch (e) {}
 
-            const response = await fetch(`${config.apiUrl}/workflows`, {
+            const response = await authFetch(`${config.apiUrl}/workflows`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)

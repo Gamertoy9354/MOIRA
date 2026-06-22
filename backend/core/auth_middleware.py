@@ -86,7 +86,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def require_auth(request: Request) -> str:
+async def require_auth(request: Request) -> str:
     """Dependency: raises 401 if request has no authenticated user."""
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
@@ -94,4 +94,6 @@ def require_auth(request: Request) -> str:
             status_code=401,
             detail="Authentication required — identify yourself to MOIRA.",
         )
+    from core.llm_router import load_user_ai_config
+    await load_user_ai_config(user_id)
     return user_id

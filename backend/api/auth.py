@@ -425,6 +425,8 @@ async def save_connector_config(connector: str, request: Request, user_id: str =
         if resp.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail="Failed to save config")
 
+    from core.llm_router import invalidate_user_config_cache
+    invalidate_user_config_cache(user_id)
     logger.info("Connector config saved", user_id=user_id, connector=connector)
     return {"connector": connector, "saved": True}
 

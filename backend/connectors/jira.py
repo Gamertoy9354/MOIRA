@@ -25,13 +25,22 @@ class JiraConnector(MCPConnector):
     """Connector that exposes Jira operations as MCP tools."""
 
     def __init__(self) -> None:
+        pass
+
+    @property
+    def base_url(self) -> str:
+        return get_settings().jira_base_url.rstrip("/")
+
+    @property
+    def default_project(self) -> str:
+        return get_settings().jira_default_project
+
+    @property
+    def headers(self) -> dict:
         settings = get_settings()
-        self._base_url = settings.jira_base_url.rstrip("/")
-        self._default_project = settings.jira_default_project
-        # Basic auth: base64(email:api_token)
         creds = f"{settings.jira_email}:{settings.jira_api_token}"
         encoded = base64.b64encode(creds.encode()).decode()
-        self._headers = {
+        return {
             "Authorization": f"Basic {encoded}",
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -147,8 +156,8 @@ class JiraConnector(MCPConnector):
     # ------------------------------------------------------------------
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
-        url = f"{self._base_url}/rest/api/3{path}"
-        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+        url = f"{self.base_url}/rest/api/3{path}"
+        async with httpx.AsyncClient(headers=self.headers, timeout=30) as client:
             resp = await client.request(method, url, **kwargs)
 
         if resp.status_code in (401, 403):
@@ -168,7 +177,7 @@ class JiraConnector(MCPConnector):
     # ------------------------------------------------------------------
 
     async def _create_issue(self, params: dict) -> dict:
-        project_key = params.get("project_key", self._default_project)
+        project_key = params.get("project_key", self.default_project)
         priority = params.get("priority", "Medium")
         description_text = params.get("description", "")
 
@@ -224,7 +233,7 @@ class JiraConnector(MCPConnector):
             "issue_key": data["key"],
             "key": data["key"],          # alias so templates like {{step_0.output.key}} work
             "issue_id": data["id"],
-            "issue_url": f"{self._base_url}/browse/{data['key']}",
+            "issue_url": f"{self.base_url}/browse/{data['key']}",
             "summary": params["summary"],
             "project": project_key,
             "issue_type": issue_type,
@@ -244,11 +253,11 @@ class JiraConnector(MCPConnector):
             "reporter": fields.get("reporter", {}).get("displayName", ""),
             "created": fields.get("created", ""),
             "updated": fields.get("updated", ""),
-            "issue_url": f"{self._base_url}/browse/{data['key']}",
+            "issue_url": f"{self.base_url}/browse/{data['key']}",
         }
 
     async def _list_issues(self, params: dict) -> dict:
-        project_key = params.get("project_key", self._default_project)
+        project_key = params.get("project_key", self.default_project)
         max_results = params.get("max_results", 20)
 
         jql_parts = [f"project = {project_key}"]
@@ -269,7 +278,7 @@ class JiraConnector(MCPConnector):
                 "status": f.get("status", {}).get("name", ""),
                 "type": f.get("issuetype", {}).get("name", ""),
                 "priority": f.get("priority", {}).get("name", ""),
-                "url": f"{self._base_url}/browse/{item['key']}",
+                "url": f"{self.base_url}/browse/{item['key']}",
             })
 
         return {"issues": issues, "total": data.get("total", len(issues)), "project": project_key}
@@ -299,7 +308,7 @@ class JiraConnector(MCPConnector):
         return {
             "issue_key": issue_key,
             "new_status": matched_name,
-            "issue_url": f"{self._base_url}/browse/{issue_key}",
+            "issue_url": f"{self.base_url}/browse/{issue_key}",
         }
 
     async def _add_comment(self, params: dict) -> dict:
@@ -323,7 +332,7 @@ class JiraConnector(MCPConnector):
             "issue_key": issue_key,
             "comment_id": data.get("id", ""),
             "comment": comment_text,
-            "issue_url": f"{self._base_url}/browse/{issue_key}",
+            "issue_url": f"{self.base_url}/browse/{issue_key}",
         }
 
     async def _assign_issue(self, params: dict) -> dict:
@@ -340,5 +349,5 @@ class JiraConnector(MCPConnector):
         return {
             "issue_key": issue_key,
             "assignee": users[0].get("displayName", assignee_email),
-            "issue_url": f"{self._base_url}/browse/{issue_key}",
+            "issue_url": f"{self.base_url}/browse/{issue_key}",
         }

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
+import contextvars
 
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+user_credentials: contextvars.ContextVar[dict[str, any] | None] = contextvars.ContextVar("user_credentials", default=None)
 
 def find_env_file() -> str:
     if os.path.exists(".env"):
@@ -78,6 +81,10 @@ class Settings(BaseSettings):
     # ── Redis ────────────────────────────────────────────────────────────────
     redis_url: str = Field(default="redis://localhost:6379")
 
+    # ── Supabase ─────────────────────────────────────────────────────────────
+    supabase_url: str = Field(default="")
+    supabase_service_role_key: str = Field(default="")
+
     # ── App Config ───────────────────────────────────────────────────────────
     app_host: str = Field(default="0.0.0.0")
     app_port: int = Field(default=8000)
@@ -97,10 +104,32 @@ _settings: Settings | None = None
 
 
 def get_settings() -> Settings:
-    """Return singleton settings instance."""
+    """Return singleton settings instance, with user-specific ContextVar overrides."""
     global _settings
     if _settings is None:
         _settings = Settings()
+    
+    try:
+        custom = user_credentials.get()
+        if custom:
+            merged = _settings.model_dump()
+            for k, v in custom.items():
+                k_lower = k.lower().strip()
+                if k_lower in merged and v is not None:
+                    target_type = type(merged[k_lower])
+                    if target_type is bool and isinstance(v, str):
+                        merged[k_lower] = v.lower() in ("true", "1", "yes")
+                    elif target_type is int and isinstance(v, str):
+                        try:
+                            merged[k_lower] = int(v)
+                        except ValueError:
+                            pass
+                    else:
+                        merged[k_lower] = v
+            return Settings(**merged)
+    except Exception:
+        pass
+
     return _settings
 
 
@@ -113,3 +142,16 @@ def reload_settings() -> Settings:
     global _settings
     _settings = Settings()
     return _settings
+
+
+def get_credential(key: str, default: str | None = None) -> str | None:
+    """Get a credential value, checking user-specific ContextVar overrides first."""
+    try:
+        custom = user_credentials.get()
+        if custom and key.lower().strip() in custom:
+            val = custom[key.lower().strip()]
+            if val is not None:
+                return str(val)
+    except Exception:
+        pass
+    return os.environ.get(key, default)

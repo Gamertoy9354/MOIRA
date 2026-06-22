@@ -27,15 +27,23 @@ _DRIVE_BASE = "https://www.googleapis.com/drive/v3"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
+_token_cache: dict[str, tuple[str, datetime]] = {}
+
+
 class GoogleSheetsConnector(MCPConnector):
     """Connector that exposes Google Sheets operations as MCP tools."""
 
     def __init__(self) -> None:
+        pass
+
+    @property
+    def service_account(self) -> dict:
         settings = get_settings()
-        self._service_account = self._load_service_account(settings)
-        self._default_spreadsheet_id = settings.google_audit_spreadsheet_id
-        self._access_token: str | None = None
-        self._token_expiry: datetime = datetime.now(tz=timezone.utc)
+        return self._load_service_account(settings)
+
+    @property
+    def default_spreadsheet_id(self) -> str:
+        return get_settings().google_audit_spreadsheet_id
 
     # ------------------------------------------------------------------
     # Service account helpers
@@ -63,11 +71,15 @@ class GoogleSheetsConnector(MCPConnector):
 
     async def _ensure_token(self) -> str:
         """Obtain or refresh the OAuth2 access token."""
-        if self._access_token and datetime.now(tz=timezone.utc) < self._token_expiry:
-            return self._access_token
-
-        if not self._service_account:
+        sa_info = self.service_account
+        if not sa_info:
             raise MCPPermissionError("Google Sheets: no service account configured")
+
+        email = sa_info.get("client_email", "default")
+        if email in _token_cache:
+            tok, exp = _token_cache[email]
+            if datetime.now(tz=timezone.utc) < exp:
+                return tok
 
         try:
             import google.auth.transport.requests  # type: ignore
@@ -77,12 +89,13 @@ class GoogleSheetsConnector(MCPConnector):
                 "https://www.googleapis.com/auth/spreadsheets",
                 "https://www.googleapis.com/auth/drive.readonly",
             ]
-            creds = sa.Credentials.from_service_account_info(self._service_account, scopes=scopes)
+            creds = sa.Credentials.from_service_account_info(sa_info, scopes=scopes)
             request = google.auth.transport.requests.Request()
             creds.refresh(request)
-            self._access_token = creds.token
-            self._token_expiry = datetime.now(tz=timezone.utc) + timedelta(seconds=3500)
-            return self._access_token  # type: ignore
+            tok = creds.token
+            exp = datetime.now(tz=timezone.utc) + timedelta(seconds=3500)
+            _token_cache[email] = (tok, exp)
+            return tok
         except Exception as exc:
             raise MCPPermissionError(f"Google Sheets token error: {exc}") from exc
 
@@ -203,7 +216,7 @@ class GoogleSheetsConnector(MCPConnector):
     # ------------------------------------------------------------------
 
     async def _append_row(self, params: dict) -> dict:
-        sid = params.get("spreadsheet_id") or self._default_spreadsheet_id
+        sid = params.get("spreadsheet_id") or self.default_spreadsheet_id
         if not sid:
             raise MCPToolError("No spreadsheet_id provided and no default configured")
         sheet = params.get("sheet_name", "Sheet1")
@@ -239,7 +252,7 @@ class GoogleSheetsConnector(MCPConnector):
         }
 
     async def _read_range(self, params: dict) -> dict:
-        sid = params.get("spreadsheet_id") or self._default_spreadsheet_id
+        sid = params.get("spreadsheet_id") or self.default_spreadsheet_id
         if not sid:
             raise MCPToolError("No spreadsheet_id provided and no default configured")
         range_notation = params["range_notation"]
@@ -252,7 +265,7 @@ class GoogleSheetsConnector(MCPConnector):
         }
 
     async def _update_cell(self, params: dict) -> dict:
-        sid = params.get("spreadsheet_id") or self._default_spreadsheet_id
+        sid = params.get("spreadsheet_id") or self.default_spreadsheet_id
         if not sid:
             raise MCPToolError("No spreadsheet_id provided and no default configured")
         cell = params["cell_notation"]
@@ -290,13 +303,13 @@ class GoogleSheetsConnector(MCPConnector):
 
     async def batch_format(self, spreadsheet_id: str, requests: list) -> dict:
         """Send a batchUpdate formatting request to the Sheets API."""
-        sid = spreadsheet_id or self._default_spreadsheet_id
+        sid = spreadsheet_id or self.default_spreadsheet_id
         url = f"{_SHEETS_BASE}/{sid}:batchUpdate"
         return await self._request("POST", url, json={"requests": requests})
 
     async def get_sheet_id(self, spreadsheet_id: str, sheet_name: str) -> int:
         """Return the numeric sheetId for a named tab."""
-        sid = spreadsheet_id or self._default_spreadsheet_id
+        sid = spreadsheet_id or self.default_spreadsheet_id
         url = f"{_SHEETS_BASE}/{sid}?fields=sheets.properties"
         data = await self._request("GET", url)
         for sheet in data.get("sheets", []):
@@ -306,7 +319,7 @@ class GoogleSheetsConnector(MCPConnector):
 
     async def get_first_sheet_title(self, spreadsheet_id: str) -> str:
         """Return the title of the first tab in the spreadsheet."""
-        sid = spreadsheet_id or self._default_spreadsheet_id
+        sid = spreadsheet_id or self.default_spreadsheet_id
         if not sid:
             return "Sheet1"
         url = f"{_SHEETS_BASE}/{sid}?fields=sheets.properties"
@@ -318,7 +331,7 @@ class GoogleSheetsConnector(MCPConnector):
 
     async def clear_range(self, spreadsheet_id: str, range_notation: str) -> dict:
         """Clear all values in a range."""
-        sid = spreadsheet_id or self._default_spreadsheet_id
+        sid = spreadsheet_id or self.default_spreadsheet_id
         # Use urllib.parse.quote to properly encode the range
         from urllib.parse import quote
         encoded_range = quote(range_notation, safe='')
@@ -327,7 +340,7 @@ class GoogleSheetsConnector(MCPConnector):
 
     async def write_range(self, spreadsheet_id: str, range_notation: str, values: list) -> dict:
         """Write a 2D array of values to an exact range."""
-        sid = spreadsheet_id or self._default_spreadsheet_id
+        sid = spreadsheet_id or self.default_spreadsheet_id
         url = f"{_SHEETS_BASE}/{sid}/values/{range_notation}"
         return await self._request(
             "PUT", url,

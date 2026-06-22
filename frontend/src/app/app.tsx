@@ -17,6 +17,7 @@ import { CredentialsBanner, type PendingCredential } from './components/Credenti
 import { PauseEditModal } from './components/PauseEditModal';
 import { MoiraLogo } from './components/MoiraLogo';
 import { config } from '../config';
+import { authFetch } from '../lib/supabase';
 
 // Terminal panel clear state (local to app)
 const useLocalTerminalLines = (lines: any[]) => {
@@ -223,7 +224,7 @@ export default function App() {
         setCredServiceId('');
         setPendingCredentials(prev => prev.filter(p => p.service !== service));
         try {
-            await fetch(`${config.apiUrl}/synthesized-tools/${service}/credentials`, {
+            await authFetch(`${config.apiUrl}/synthesized-tools/${service}/credentials`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ credentials: values, workflow_id: credWorkflowId }),
@@ -238,7 +239,7 @@ export default function App() {
 
     const handleViewGuideForService = async (service: string) => {
         try {
-            const r = await fetch(`${config.apiUrl}/synthesized-tools/${service}/guide`);
+            const r = await authFetch(`${config.apiUrl}/synthesized-tools/${service}/guide`);
             if (!r.ok) throw new Error(`Server error ${r.status}`);
             const data = await r.json();
             const guide = data.guide ?? {};
@@ -270,7 +271,7 @@ export default function App() {
 
     const handleApprovalSubmit = async (approved: boolean, workflowId: string, stepId: string) => {
         try {
-            await fetch(`${config.apiUrl}/workflows/${workflowId}/approve`, {
+            await authFetch(`${config.apiUrl}/workflows/${workflowId}/approve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ step_id: stepId, approved, approver: 'User' }),
@@ -282,7 +283,7 @@ export default function App() {
     const handleKillWorkflow = async () => {
         if (!activeWorkflowId) return;
         try {
-            await fetch(`${config.apiUrl}/workflows/${activeWorkflowId}`, { method: 'DELETE' });
+            await authFetch(`${config.apiUrl}/workflows/${activeWorkflowId}`, { method: 'DELETE' });
             setActiveWorkflowId(null);
             setIsWorkflowPaused(false);
             toast.error('⛔ Workflow terminated.');
@@ -292,7 +293,7 @@ export default function App() {
     const handlePauseWorkflow = async () => {
         if (!activeWorkflowId) return;
         try {
-            await fetch(`${config.apiUrl}/workflows/${activeWorkflowId}/pause`, { method: 'POST' });
+            await authFetch(`${config.apiUrl}/workflows/${activeWorkflowId}/pause`, { method: 'POST' });
             setIsWorkflowPaused(true);
             setPauseEditOpen(true);
             setCurrentPrompt((window as any).__currentPrompt ?? '');
@@ -302,7 +303,7 @@ export default function App() {
     const handleResumeWorkflow = async () => {
         if (!activeWorkflowId) return;
         try {
-            await fetch(`${config.apiUrl}/workflows/${activeWorkflowId}/resume`, { method: 'POST' });
+            await authFetch(`${config.apiUrl}/workflows/${activeWorkflowId}/resume`, { method: 'POST' });
             setIsWorkflowPaused(false);
             setPauseEditOpen(false);
             toast.success('Workflow resumed.');
@@ -312,7 +313,7 @@ export default function App() {
     const handleResubmitWorkflow = async (newPrompt: string) => {
         setPauseEditOpen(false);
         if (activeWorkflowId) {
-            try { await fetch(`${config.apiUrl}/workflows/${activeWorkflowId}`, { method: 'DELETE' }); } catch {}
+            try { await authFetch(`${config.apiUrl}/workflows/${activeWorkflowId}`, { method: 'DELETE' }); } catch {}
         }
         setActiveWorkflowId(null);
         setIsWorkflowPaused(false);
@@ -568,7 +569,7 @@ export default function App() {
                     const service = synthServiceName?.toLowerCase().replace(/\s+/g, '_');
                     if (workflowId && service) {
                         try {
-                            await fetch(`${config.apiUrl}/workflows/${workflowId}/approve`, {
+                            await authFetch(`${config.apiUrl}/workflows/${workflowId}/approve`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ step_id: `synthesis_${service}`, approved: true, approver: 'User' }),
@@ -582,7 +583,7 @@ export default function App() {
                     const service = synthServiceName?.toLowerCase().replace(/\s+/g, '_');
                     if (workflowId && service) {
                         try {
-                            await fetch(`${config.apiUrl}/workflows/${workflowId}/approve`, {
+                            await authFetch(`${config.apiUrl}/workflows/${workflowId}/approve`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ step_id: `synthesis_${service}`, approved: false, approver: 'User' }),

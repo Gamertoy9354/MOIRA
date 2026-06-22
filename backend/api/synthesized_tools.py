@@ -6,9 +6,10 @@ import json
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
+from core.auth_middleware import require_auth
 from core.connector_registry import get_registry
 from utils.logger import get_logger
 
@@ -34,33 +35,42 @@ class PreviewRequest(BaseModel):
 # Helper: read DB row
 # ---------------------------------------------------------------------------
 
-async def _get_db_row(service_name: str) -> dict | None:
+async def _get_db_row(service_name: str, user_id: str | None = None) -> dict | None:
     try:
         from db.connection import get_pool
         pool = await get_pool()
         if not pool:
             from db.redis_db import is_redis_available, redis_get_synthesized_tool
             if await is_redis_available():
-                return await redis_get_synthesized_tool(service_name)
+                row = await redis_get_synthesized_tool(service_name)
+                if row and (user_id is None or row.get("user_id") == user_id):
+                    return row
             return None
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM synthesized_tools WHERE service_name = $1",
-                service_name,
-            )
+            if user_id:
+                row = await conn.fetchrow(
+                    "SELECT * FROM synthesized_tools WHERE service_name = $1 AND user_id = $2",
+                    service_name,
+                    user_id,
+                )
+            else:
+                row = await conn.fetchrow(
+                    "SELECT * FROM synthesized_tools WHERE service_name = $1",
+                    service_name,
+                )
         return dict(row) if row else None
     except Exception:
         return None
 
 
-async def _list_db_rows() -> list[dict]:
+async def _list_db_rows(user_id: str | None = None) -> list[dict]:
     try:
         from db.connection import get_pool
         pool = await get_pool()
         if not pool:
             from db.redis_db import is_redis_available, redis_list_synthesized_tools
             if await is_redis_available():
-                rows = await redis_list_synthesized_tools()
+                rows = await redis_list_synthesized_tools(user_id)
                 result = []
                 for row in rows:
                     d = dict(row)
@@ -73,9 +83,15 @@ async def _list_db_rows() -> list[dict]:
                 return result
             return []
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT * FROM synthesized_tools ORDER BY created_at DESC"
-            )
+            if user_id:
+                rows = await conn.fetch(
+                    "SELECT * FROM synthesized_tools WHERE user_id = $1 ORDER BY created_at DESC",
+                    user_id
+                )
+            else:
+                rows = await conn.fetch(
+                    "SELECT * FROM synthesized_tools ORDER BY created_at DESC"
+                )
         result = []
         for row in rows:
             d = dict(row)
@@ -96,20 +112,26 @@ async def _list_db_rows() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_synthesized_tools() -> dict:
+async def list_synthesized_tools(user_id: str = Depends(require_auth)) -> dict:
     """Return all synthesized tools — from DB if available, registry as fallback."""
     reg = get_registry()
-    records = reg.get_synthesized_tools()
+    clean_user_id = user_id.replace("-", "_")
+    suffix = f"_{clean_user_id}"
+    
+    records = [r for r in reg.get_synthesized_tools() if r.service_name.endswith(suffix)]
 
     # Enrich with DB data
-    db_rows = await _list_db_rows()
+    db_rows = await _list_db_rows(user_id)
     db_map = {r["service_name"]: r for r in db_rows}
 
     tools = []
     for rec in records:
         db = db_map.get(rec.service_name, {})
+        display_name = rec.service_name[:-len(suffix)] if rec.service_name.endswith(suffix) else rec.service_name
+        display_name = display_name.title().replace("_", " ")
         tools.append({
             "service_name": rec.service_name,
+            "display_name": display_name,
             "connector_class_name": rec.connector_class_name,
             "file_path": rec.file_path,
             "tool_names": rec.tool_names,
@@ -124,8 +146,11 @@ async def list_synthesized_tools() -> dict:
     in_memory_names = {r.service_name for r in records}
     for row in db_rows:
         if row["service_name"] not in in_memory_names:
+            display_name = row["service_name"][:-len(suffix)] if row["service_name"].endswith(suffix) else row["service_name"]
+            display_name = display_name.title().replace("_", " ")
             tools.append({
                 "service_name": row["service_name"],
+                "display_name": display_name,
                 "connector_class_name": row.get("connector_class_name", ""),
                 "file_path": row.get("file_path", ""),
                 "tool_names": row.get("tools", []),
@@ -141,11 +166,16 @@ async def list_synthesized_tools() -> dict:
 
 
 @router.get("/{service_name}")
-async def get_synthesized_tool(service_name: str) -> dict:
+async def get_synthesized_tool(service_name: str, user_id: str = Depends(require_auth)) -> dict:
     """Return detailed metadata for one synthesized tool."""
+    clean_user_id = user_id.replace("-", "_")
+    suffix = f"_{clean_user_id}"
+    if not service_name.endswith(suffix):
+        raise HTTPException(status_code=404, detail=f"Tool '{service_name}' not found")
+
     reg = get_registry()
     connector = reg.get(service_name)
-    db = await _get_db_row(service_name)
+    db = await _get_db_row(service_name, user_id)
 
     if not connector and not db:
         raise HTTPException(status_code=404, detail=f"Tool '{service_name}' not found")
@@ -167,9 +197,14 @@ async def get_synthesized_tool(service_name: str) -> dict:
 
 
 @router.get("/{service_name}/guide")
-async def get_setup_guide(service_name: str) -> dict:
+async def get_setup_guide(service_name: str, user_id: str = Depends(require_auth)) -> dict:
     """Return the JSON setup guide for a synthesized tool."""
-    db = await _get_db_row(service_name)
+    clean_user_id = user_id.replace("-", "_")
+    suffix = f"_{clean_user_id}"
+    if not service_name.endswith(suffix):
+        raise HTTPException(status_code=404, detail=f"Tool '{service_name}' not found")
+
+    db = await _get_db_row(service_name, user_id)
     if not db:
         raise HTTPException(status_code=404, detail=f"Tool '{service_name}' not found")
 
@@ -182,8 +217,13 @@ async def get_setup_guide(service_name: str) -> dict:
 
 
 @router.delete("/{service_name}")
-async def delete_synthesized_tool(service_name: str) -> dict:
+async def delete_synthesized_tool(service_name: str, user_id: str = Depends(require_auth)) -> dict:
     """Remove a synthesized tool from disk, DB, and registry."""
+    clean_user_id = user_id.replace("-", "_")
+    suffix = f"_{clean_user_id}"
+    if not service_name.endswith(suffix):
+        raise HTTPException(status_code=404, detail=f"Tool '{service_name}' not found")
+
     reg = get_registry()
     removed: list[str] = []
 
@@ -192,7 +232,7 @@ async def delete_synthesized_tool(service_name: str) -> dict:
         from db.connection import get_pool
         pool = await get_pool()
         if pool:
-            db = await _get_db_row(service_name)
+            db = await _get_db_row(service_name, user_id)
             if db:
                 # Remove guide files
                 for path_key in ("guide_md_path", "guide_json_path", "file_path"):
@@ -201,14 +241,15 @@ async def delete_synthesized_tool(service_name: str) -> dict:
                         Path(p).unlink()
                 async with pool.acquire() as conn:
                     await conn.execute(
-                        "DELETE FROM synthesized_tools WHERE service_name = $1",
+                        "DELETE FROM synthesized_tools WHERE service_name = $1 AND user_id = $2",
                         service_name,
+                        user_id,
                     )
                 removed.append("database")
         else:
             from db.redis_db import is_redis_available, redis_delete_synthesized_tool
             if await is_redis_available():
-                db = await _get_db_row(service_name)
+                db = await _get_db_row(service_name, user_id)
                 if db:
                     # Remove guide files
                     for path_key in ("guide_md_path", "guide_json_path", "file_path"):
@@ -248,33 +289,85 @@ async def preview_gaps(body: PreviewRequest) -> dict:
 
 
 @router.post("/{service_name}/credentials")
-async def submit_credentials(service_name: str, body: CredentialSubmitRequest) -> dict:
+async def submit_credentials(
+    service_name: str,
+    body: CredentialSubmitRequest,
+    user_id: str = Depends(require_auth)
+) -> dict:
     """
-    Accept credentials from the developer, write them to the .env file,
-    reload them into the current process environment, and signal the
-    workflow to resume.
+    Accept credentials from the developer, write them to the DB / config,
+    and signal the workflow to resume.
     """
-    env_path = Path(__file__).parent.parent.parent / ".env"
-    lines = []
-    if env_path.exists():
-        lines = env_path.read_text(encoding="utf-8").splitlines()
+    clean_user_id = user_id.replace("-", "_")
+    suffix = f"_{clean_user_id}"
+    if not service_name.endswith(suffix):
+        raise HTTPException(status_code=404, detail=f"Tool '{service_name}' not found")
 
-    for env_key, env_val in body.credentials.items():
-        os.environ[env_key] = env_val  # hot-inject into current process
-        # Update or append to .env
-        found = False
-        for i, line in enumerate(lines):
-            if line.startswith(f"{env_key}=") or line.startswith(f"{env_key} ="):
-                lines[i] = f'{env_key}="{env_val}"'
-                found = True
-                break
-        if not found:
-            lines.append(f'{env_key}="{env_val}"')
+    from utils.config import get_settings
+    settings = get_settings()
+    supabase_url = settings.supabase_url or os.getenv("SUPABASE_URL", "")
+    supabase_key = settings.supabase_service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    is_mock = not supabase_url or not supabase_key or "YOUR_SUPABASE" in supabase_key or os.getenv("DEBUG", "true").lower() == "true"
 
-    try:
-        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not write .env file", error=str(exc))
+    if is_mock:
+        # Local mock mode fallback
+        env_path = Path(__file__).parent.parent.parent / ".env"
+        lines = []
+        if env_path.exists():
+            lines = env_path.read_text(encoding="utf-8").splitlines()
+
+        for env_key, env_val in body.credentials.items():
+            os.environ[env_key] = env_val  # hot-inject
+            found = False
+            for i, line in enumerate(lines):
+                if line.startswith(f"{env_key}=") or line.startswith(f"{env_key} ="):
+                    lines[i] = f'{env_key}="{env_val}"'
+                    found = True
+                    break
+            if not found:
+                lines.append(f'{env_key}="{env_val}"')
+
+        try:
+            env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except Exception as exc:
+            logger.warning("Could not write .env file", error=str(exc))
+    else:
+        # Supabase mode: save to user_env_configs
+        import httpx
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json",
+        }
+        async with httpx.AsyncClient() as client:
+            # Get profile id
+            profile_resp = await client.get(
+                f"{supabase_url}/rest/v1/user_profiles",
+                headers=headers,
+                params={"supabase_uid": f"eq.{user_id}", "select": "id"},
+            )
+            profiles = profile_resp.json()
+            if not profiles:
+                raise HTTPException(status_code=404, detail="Profile not found")
+            profile_id = profiles[0]["id"]
+
+            # Upsert config
+            resp = await client.post(
+                f"{supabase_url}/rest/v1/user_env_configs",
+                headers={**headers, "Prefer": "resolution=merge-duplicates,return=representation"},
+                json={
+                    "user_id": profile_id,
+                    "connector_name": service_name,
+                    "config_data": body.credentials,
+                    "is_configured": True,
+                },
+            )
+            if resp.status_code not in (200, 201):
+                raise HTTPException(status_code=500, detail="Failed to save credentials")
+
+    # Invalidate config cache
+    from core.llm_router import invalidate_user_config_cache
+    invalidate_user_config_cache(user_id)
 
     # Reload the connector with new env vars (re-instantiate)
     reg = get_registry()
@@ -312,13 +405,18 @@ async def submit_credentials(service_name: str, body: CredentialSubmitRequest) -
     return {
         "service": service_name,
         "saved_keys": list(body.credentials.keys()),
-        "message": "Credentials saved and injected into environment.",
+        "message": "Credentials saved successfully.",
     }
 
 
 @router.post("/{service_name}/test")
-async def test_synthesized_tool(service_name: str) -> dict:
+async def test_synthesized_tool(service_name: str, user_id: str = Depends(require_auth)) -> dict:
     """Run a basic connectivity check by listing tools from the connector."""
+    clean_user_id = user_id.replace("-", "_")
+    suffix = f"_{clean_user_id}"
+    if not service_name.endswith(suffix):
+        raise HTTPException(status_code=404, detail=f"Tool '{service_name}' not found")
+
     reg = get_registry()
     connector = reg.get(service_name)
     if not connector:

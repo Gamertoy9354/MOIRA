@@ -126,12 +126,13 @@ async def write_workflow(
     user_request: str,
     status: str,
     dag: dict[str, Any] | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Upsert a workflow record."""
     pool = await get_pool()
     if not pool:
         if await is_redis_available():
-            await redis_write_workflow(workflow_id, user_request, status, dag)
+            await redis_write_workflow(workflow_id, user_request, status, dag, user_id)
             return
 
         _memory_store["workflows"][workflow_id] = {
@@ -139,6 +140,7 @@ async def write_workflow(
             "user_request": user_request,
             "status": status,
             "dag": dag,
+            "user_id": user_id,
             "updated_at": datetime.utcnow()
         }
         return
@@ -146,15 +148,16 @@ async def write_workflow(
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO workflows (id, user_request, status, dag, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            INSERT INTO workflows (id, user_request, status, dag, created_at, updated_at, user_id)
+            VALUES ($1, $2, $3, $4, NOW(), NOW(), $5)
             ON CONFLICT (id) DO UPDATE
-            SET status = $3, dag = $4, updated_at = NOW()
+            SET status = $3, dag = $4, updated_at = NOW(), user_id = $5
             """,
             workflow_id,
             user_request,
             status,
             json.dumps(dag, default=str) if dag else None,
+            user_id,
         )
 
 

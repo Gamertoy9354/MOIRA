@@ -26,10 +26,16 @@ class SlackConnector(MCPConnector):
     """Connector that exposes Slack operations as MCP tools."""
 
     def __init__(self) -> None:
-        settings = get_settings()
-        self._token = settings.slack_bot_token
-        self._headers = {
-            "Authorization": f"Bearer {self._token}",
+        pass
+
+    @property
+    def token(self) -> str:
+        return get_settings().slack_bot_token
+
+    @property
+    def headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         }
 
@@ -116,7 +122,7 @@ class SlackConnector(MCPConnector):
 
     async def _request(self, method_path: str, payload: dict) -> dict:
         url = f"{_SLACK_BASE}/{method_path}"
-        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+        async with httpx.AsyncClient(headers=self.headers, timeout=30) as client:
             resp = await client.post(url, json=payload)
 
         if resp.status_code == 429:

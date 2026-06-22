@@ -57,6 +57,7 @@ async def redis_write_workflow(
     user_request: str,
     status: str,
     dag: dict[str, Any] | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Upsert a workflow record in Redis."""
     client = get_redis_client()
@@ -78,6 +79,7 @@ async def redis_write_workflow(
         "user_request": user_request,
         "status": status,
         "dag": dag,
+        "user_id": user_id,
         "created_at": created_at,
         "updated_at": datetime.utcnow().isoformat(),
     }
@@ -130,7 +132,7 @@ async def redis_get_workflow(workflow_id: str) -> dict[str, Any] | None:
     return None
 
 
-async def redis_list_workflows() -> list[dict[str, Any]]:
+async def redis_list_workflows(user_id: str | None = None) -> list[dict[str, Any]]:
     """List all workflows from Redis, sorted descending by created_at."""
     client = get_redis_client()
     if not client:
@@ -141,7 +143,8 @@ async def redis_list_workflows() -> list[dict[str, Any]]:
     for wf_id in workflow_ids:
         wf = await redis_get_workflow(wf_id)
         if wf:
-            workflows.append(wf)
+            if user_id is None or wf.get("user_id") == user_id:
+                workflows.append(wf)
 
     workflows.sort(key=lambda w: w.get("created_at") or datetime.min, reverse=True)
     return workflows
@@ -242,6 +245,7 @@ async def redis_write_synthesized_tool(
     safety_scan_result: dict[str, Any],
     validation_passed: bool,
     workflow_id: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Upsert a synthesized tool record in Redis."""
     client = get_redis_client()
@@ -276,6 +280,7 @@ async def redis_write_synthesized_tool(
         "safety_scan_result": safety_scan_result,
         "validation_passed": validation_passed,
         "created_by_workflow_id": workflow_id,
+        "user_id": user_id,
         "created_at": created_at,
         "times_used": times_used,
         "guide_md_path": guide_md_path,
@@ -326,7 +331,7 @@ async def redis_get_synthesized_tool(service_name: str) -> dict[str, Any] | None
     return None
 
 
-async def redis_list_synthesized_tools() -> list[dict[str, Any]]:
+async def redis_list_synthesized_tools(user_id: str | None = None) -> list[dict[str, Any]]:
     """List all synthesized tools from Redis, sorted by created_at DESC."""
     client = get_redis_client()
     if not client:
@@ -337,7 +342,8 @@ async def redis_list_synthesized_tools() -> list[dict[str, Any]]:
     for service in services:
         t = await redis_get_synthesized_tool(service)
         if t:
-            tools.append(t)
+            if user_id is None or t.get("user_id") == user_id:
+                tools.append(t)
     tools.sort(key=lambda t: t.get("created_at") or datetime.min, reverse=True)
     return tools
 

@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import { Message, DAGNode, MessageMode } from '../../services/types';
 import { toast } from "sonner";
 import { config } from '../../config';
+import { authFetch } from '../../lib/supabase';
 import { MoiraLogo } from './MoiraLogo';
 import {
     Dialog,
@@ -87,12 +88,12 @@ export function ChatArea({ messages, dagNodes, isTyping, isPlanning, workflowSta
         const wfId = getCurrentWorkflowId();
         if (wfId) {
             try {
-                const r = await fetch(`${config.apiUrl}/workflows/${wfId}/audit`);
+                const r = await authFetch(`${config.apiUrl}/workflows/${wfId}/audit`);
                 const data = await r.json();
                 if (data.audit_log && data.audit_log.length > 0) {
                     setAuditRows(data.audit_log);
                 } else {
-                    const r2 = await fetch(`${config.apiUrl}/workflows/${wfId}`);
+                    const r2 = await authFetch(`${config.apiUrl}/workflows/${wfId}`);
                     const wf = await r2.json();
                     const steps = wf?.dag?.steps || {};
                     const rows = Object.values(steps).map((s: any) => ({

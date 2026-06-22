@@ -7,6 +7,7 @@ import {
     Loader2, AlertTriangle, Code2, Settings, Key,
 } from 'lucide-react';
 import { config } from '../../config';
+import { authFetch } from '../../lib/supabase';
 
 // ──────────────────── Types ─────────────────────────────────────────────────
 
@@ -294,7 +295,7 @@ export function SynthesizedToolsLibrary({ onViewGuide, onDelete, onConfigureConn
 
     const handleConfigure = async (service: string, displayName: string) => {
         try {
-            const r = await fetch(`${config.apiUrl}/synthesized-tools/${service}/guide`);
+            const r = await authFetch(`${config.apiUrl}/synthesized-tools/${service}/guide`);
             if (!r.ok) throw new Error(`Failed to load guide: ${r.status}`);
             const data = await r.json();
             const guide = data.guide ?? {};
@@ -331,7 +332,7 @@ export function SynthesizedToolsLibrary({ onViewGuide, onDelete, onConfigureConn
         setLoading(true);
         setError(null);
         try {
-            const r = await fetch(`${config.apiUrl}/synthesized-tools`);
+            const r = await authFetch(`${config.apiUrl}/synthesized-tools`);
             if (!r.ok) throw new Error(`Server error ${r.status}`);
             const data = await r.json();
             // Backend returns { synthesized_tools: [...], total: N }
@@ -363,7 +364,7 @@ export function SynthesizedToolsLibrary({ onViewGuide, onDelete, onConfigureConn
     const handleTest = async (service: string) => {
         setTestingId(service);
         try {
-            const r = await fetch(`${config.apiUrl}/synthesized-tools/${service}/test`, { method: 'POST' });
+            const r = await authFetch(`${config.apiUrl}/synthesized-tools/${service}/test`, { method: 'POST' });
             setTestResults(prev => ({ ...prev, [service]: r.ok ? 'ok' : 'fail' }));
         } catch {
             setTestResults(prev => ({ ...prev, [service]: 'fail' }));
@@ -380,7 +381,7 @@ export function SynthesizedToolsLibrary({ onViewGuide, onDelete, onConfigureConn
             return;
         }
         try {
-            await fetch(`${config.apiUrl}/synthesized-tools/${service}`, { method: 'DELETE' });
+            await authFetch(`${config.apiUrl}/synthesized-tools/${service}`, { method: 'DELETE' });
             setTools(prev => prev.filter(t => t.service !== service));
             onDelete?.(service);
         } catch {
