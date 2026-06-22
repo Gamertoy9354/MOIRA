@@ -51,8 +51,9 @@ services:
         value: 0.0.0.0
 
   # 3. Static Frontend (Vite)
-  - type: static
+  - type: web
     name: moira-frontend
+    runtime: static
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: ./frontend/dist
     domains:
