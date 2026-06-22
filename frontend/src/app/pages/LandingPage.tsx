@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
     Zap, Shield, GitBranch, BarChart3, Terminal,
     ChevronDown, ArrowRight, CheckCircle2, Globe, Code2,
@@ -1447,8 +1447,8 @@ User: "Onboard new hire Dev Patel in GitHub and Slack"
                     <span style={{ fontSize: 12, color: 'rgba(200,169,110,0.2)' }}>Ancient. Inevitable. Timeless.</span>
                 </div>
                 <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
-                    <motion.button onClick={() => navigate('/privacy')} whileHover={{ color: '#C8A96E', scale: 1.02 }} whileTap={{ scale: 0.98 }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(200,169,110,0.4)', fontSize: 12, transition: 'color 0.2s', fontFamily: 'Cinzel, serif', letterSpacing: '0.04em', padding: 0 }}>Privacy Policy</motion.button>
-                    <motion.button onClick={() => navigate('/terms')} whileHover={{ color: '#C8A96E', scale: 1.02 }} whileTap={{ scale: 0.98 }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(200,169,110,0.4)', fontSize: 12, transition: 'color 0.2s', fontFamily: 'Cinzel, serif', letterSpacing: '0.04em', padding: 0 }}>Terms of Service</motion.button>
+                    <Link to="/privacy" style={{ color: 'rgba(200,169,110,0.4)', textDecoration: 'none', transition: 'color 0.2s', fontFamily: 'Cinzel, serif', letterSpacing: '0.04em' }} onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#C8A96E'} onMouseLeave={(e) => (e.target as HTMLElement).style.color = 'rgba(200,169,110,0.4)'}>Privacy Policy</Link>
+                    <Link to="/terms" style={{ color: 'rgba(200,169,110,0.4)', textDecoration: 'none', transition: 'color 0.2s', fontFamily: 'Cinzel, serif', letterSpacing: '0.04em' }} onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#C8A96E'} onMouseLeave={(e) => (e.target as HTMLElement).style.color = 'rgba(200,169,110,0.4)'}>Terms of Service</Link>
                 </div>
             </footer>
         </div>
